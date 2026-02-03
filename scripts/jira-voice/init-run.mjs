@@ -56,7 +56,7 @@ function maskPII(s) {
 }
 
 function parseArgs(argv) {
-  const out = { source: 'transcript' };
+  const out = { source: 'transcript', dev: false };
   const take = (i) => {
     if (i + 1 >= argv.length) die(`Missing value for ${argv[i]}`);
     return argv[i + 1];
@@ -69,6 +69,7 @@ function parseArgs(argv) {
       case '--transcriptText': out.transcriptText = take(i++); break;
       case '--source': out.source = take(i++); break;
       case '--title': out.title = take(i++); break;
+      case '--dev': out.dev = true; break;
       default: die(`Unknown arg: ${a}`);
     }
   }
@@ -101,8 +102,8 @@ async function main() {
   const transcriptBuf = Buffer.from(text, 'utf8');
   const transcriptHash = `sha256:${sha256Hex(transcriptBuf)}`;
 
-  const transcriptsDir = path.resolve('logs/jira-voice/transcripts');
-  const runsDir = path.resolve('logs/jira-voice/runs');
+  const transcriptsDir = path.resolve('logs/jira-voice/transcripts', args.dev ? '_dev' : '');
+  const runsDir = path.resolve('logs/jira-voice/runs', args.dev ? '_dev' : '');
   ensureDir(transcriptsDir);
   ensureDir(runsDir);
 
@@ -115,6 +116,7 @@ async function main() {
 
   const run = {
     run_id: id,
+    dev: !!args.dev,
     createdAt: nowIso(),
     source: args.source,
     title: args.title ?? null,

@@ -11,9 +11,10 @@ export JIRA_PROJECT_KEY="TEST"
 TRANSCRIPT=$'오늘 회의에서 다음을 논의했습니다.\n- 결제 플로우 이탈 원인 분석\n- 이벤트 트래킹 누락 수정\n- 다음주까지 리텐션 리포트 초안\n'
 
 echo "== init run =="
-RUN_JSON=$(node scripts/jira-voice/init-run.mjs --source transcript --title "dryrun" --transcriptText "$TRANSCRIPT")
+RUN_JSON=$(node scripts/jira-voice/init-run.mjs --dev --source transcript --title "dryrun" --transcriptText "$TRANSCRIPT")
 echo "$RUN_JSON"
 RUN_ID=$(echo "$RUN_JSON" | node -e 'const s=require("fs").readFileSync(0,"utf8"); console.log(JSON.parse(s).run_id)')
+RUN_FILE=$(echo "$RUN_JSON" | node -e 'const s=require("fs").readFileSync(0,"utf8"); console.log(JSON.parse(s).run_file)')
 
 cat > /tmp/jira-candidates.json <<'JSON'
 [
@@ -33,7 +34,7 @@ cat > /tmp/jira-candidates.json <<'JSON'
 JSON
 
 echo "== add candidates =="
-node scripts/jira-voice/add-candidates.mjs --runId "$RUN_ID" --candidatesFile /tmp/jira-candidates.json
+node scripts/jira-voice/add-candidates.mjs --runFile "$RUN_FILE" --candidatesFile /tmp/jira-candidates.json
 
 echo "== apply (dry run) =="
-node skills/local/jira-from-transcript/scripts/apply.mjs --runId "$RUN_ID" --indices 1,2 --approve yes --dryRun
+node skills/local/jira-from-transcript/scripts/apply.mjs --runFile "$RUN_FILE" --indices 1,2 --approve yes --dryRun

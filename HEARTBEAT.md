@@ -24,7 +24,8 @@
   - 체크인 오픈 30분 전~오픈 시점 사이면 알림
 
 ## 4) Voice → Jira 후보 발생 여부(최근 60분)
-- logs/jira-voice/runs/ 아래에 status=pending_candidates 또는 pending_approval 항목이 있으면:
+- `logs/jira-voice/runs/` 아래에 status=`pending_candidates` 또는 `pending_approval` 항목이 있으면:
+  - 단, `runs/_dev/` (개발/테스트 런) 은 무시
   - run_id + 후보 개수 + 다음 액션(“/jira-from-transcript …” 또는 “승인: Jira 생성 …”)만 안내
 
 ## 출력 예외
