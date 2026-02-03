@@ -1,0 +1,21 @@
+.DS_Store
+
+# OpenClaw runtime / sessions
+agent-*/
+agent-main-*/
+
+# Personal memory (do not commit)
+memory/**
+
+# Logs (keep jira-voice scaffolding)
+logs/**
+!logs/jira-voice/
+!logs/jira-voice/README.md
+!logs/jira-voice/.gitkeep
+!logs/jira-voice/runs/
+!logs/jira-voice/runs/.gitkeep
+!logs/jira-voice/transcripts/
+!logs/jira-voice/transcripts/.gitkeep
+
+# OS / editor
+.DS_Store
