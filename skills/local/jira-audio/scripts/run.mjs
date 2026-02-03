@@ -18,7 +18,7 @@ function die(msg, code = 2) {
 }
 
 function parseArgs(argv) {
-  const out = { lang: 'ko' };
+  const out = { lang: 'ko', dev: false };
   const take = (i) => {
     if (i + 1 >= argv.length) die(`Missing value for ${argv[i]}`);
     return argv[i + 1];
@@ -30,6 +30,7 @@ function parseArgs(argv) {
       case '--path': out.audioPath = take(i++); break;
       case '--lang': out.lang = take(i++); break;
       case '--title': out.title = take(i++); break;
+      case '--dev': out.dev = true; break;
       default: die(`Unknown arg: ${a}`);
     }
   }
@@ -49,7 +50,7 @@ function runNode(scriptPath, args) {
 }
 
 async function main() {
-  const { audioPath, lang, title } = parseArgs(process.argv.slice(2));
+  const { audioPath, lang, title, dev } = parseArgs(process.argv.slice(2));
   if (!process.env.OPENAI_API_KEY) die('Missing OPENAI_API_KEY');
   if (!audioPath) die('Missing --path');
 
@@ -67,13 +68,13 @@ async function main() {
   if (!transcript.trim()) die('Transcription produced empty transcript');
 
   // Avoid argv length issues for long transcripts
-  const tmpDir = path.resolve('logs/jira-voice/transcripts');
+  const tmpDir = path.resolve('logs/jira-voice/transcripts', dev ? '_dev' : '');
   fs.mkdirSync(tmpDir, { recursive: true });
   const tmpTranscript = path.join(tmpDir, `latest-audio-${Date.now()}.txt`);
   fs.writeFileSync(tmpTranscript, transcript + '\n', 'utf8');
 
   const initScript = path.resolve('scripts/jira-voice/init-run.mjs');
-  const init = runNode(initScript, ['--source', 'audio', '--title', title ?? 'voice', '--transcriptFile', tmpTranscript]);
+  const init = runNode(initScript, ['--source', 'audio', '--title', title ?? 'voice', '--transcriptFile', tmpTranscript, ...(dev ? ['--dev'] : [])]);
   if (!init.ok || !init.result?.ok) {
     process.stdout.write(JSON.stringify({ ok: false, step: 'init-run', error: init }, null, 2) + '\n');
     process.exit(1);
