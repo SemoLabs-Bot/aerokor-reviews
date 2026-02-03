@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+NODE_BIN="/opt/homebrew/bin/node"
+OPENCLAW_JS="/Users/semobot/.nvm/versions/node/v24.13.0/lib/node_modules/openclaw/dist/index.js"
+
+exec "$NODE_BIN" "$OPENCLAW_JS" "$@"

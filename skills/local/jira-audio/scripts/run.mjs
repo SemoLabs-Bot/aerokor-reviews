@@ -66,8 +66,14 @@ async function main() {
   const transcript = tr.result.transcript ?? '';
   if (!transcript.trim()) die('Transcription produced empty transcript');
 
+  // Avoid argv length issues for long transcripts
+  const tmpDir = path.resolve('logs/jira-voice/transcripts');
+  fs.mkdirSync(tmpDir, { recursive: true });
+  const tmpTranscript = path.join(tmpDir, `latest-audio-${Date.now()}.txt`);
+  fs.writeFileSync(tmpTranscript, transcript + '\n', 'utf8');
+
   const initScript = path.resolve('scripts/jira-voice/init-run.mjs');
-  const init = runNode(initScript, ['--source', 'audio', '--title', title ?? 'voice', '--transcriptText', transcript]);
+  const init = runNode(initScript, ['--source', 'audio', '--title', title ?? 'voice', '--transcriptFile', tmpTranscript]);
   if (!init.ok || !init.result?.ok) {
     process.stdout.write(JSON.stringify({ ok: false, step: 'init-run', error: init }, null, 2) + '\n');
     process.exit(1);

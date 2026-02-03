@@ -29,6 +29,13 @@ node scripts/jira-voice/init-run.mjs --source transcript --transcriptText "..."
   - optional: `issueType`, `priority`, `assigneeAccountId`, `idempotencyKey`
 
 - Store the candidates into the run file and set status to `pending_approval`.
+- Optional helper (writes candidates into the run file):
+
+```bash
+node scripts/jira-voice/generate-candidates.mjs --runId <run_id> --dryRun
+# or (remote LLM; transcript is sensitive)
+node scripts/jira-voice/generate-candidates.mjs --runId <run_id> --allowRemote yes
+```
 
 3) **Approval gate (required)**
 - Ask: `승인: Jira 생성 (run_id=..., 1,3,5)`

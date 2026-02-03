@@ -8,7 +8,7 @@ export ATLASSIAN_EMAIL="devnull@example.com"
 export ATLASSIAN_API_TOKEN="dummy"
 export JIRA_PROJECT_KEY="TEST"
 
-TRANSCRIPT="오늘 회의에서 다음을 논의했습니다.\n- 결제 플로우 이탈 원인 분석\n- 이벤트 트래킹 누락 수정\n- 다음주까지 리텐션 리포트 초안\n"
+TRANSCRIPT=$'오늘 회의에서 다음을 논의했습니다.\n- 결제 플로우 이탈 원인 분석\n- 이벤트 트래킹 누락 수정\n- 다음주까지 리텐션 리포트 초안\n'
 
 echo "== init run =="
 RUN_JSON=$(node scripts/jira-voice/init-run.mjs --source transcript --title "dryrun" --transcriptText "$TRANSCRIPT")
