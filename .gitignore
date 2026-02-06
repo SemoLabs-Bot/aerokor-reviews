@@ -30,3 +30,6 @@ config/gog/**
 
 # OS / editor
 .DS_Store
+
+# Skill env files (credentials)
+skills/**/.env
