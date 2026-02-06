@@ -37,6 +37,7 @@ const cfg = JSON.parse(fs.readFileSync(configPath, 'utf8'));
 const sheetId = args.get('sheet-id') || args.get('sheetId') || cfg.sheetId;
 const tab = args.get('tab') || cfg.tab;
 const tz = cfg.timezone || 'Asia/Seoul';
+const account = args.get('account') || process.env.GOG_ACCOUNT || cfg.account || '';
 
 if (!inputPath) {
   console.error('Missing --input <path-to-json>');
@@ -74,7 +75,9 @@ function kstDateFromISO(iso) {
 }
 
 function gog(cmdArgs, { json = false } = {}) {
-  const baseArgs = [...cmdArgs, '--no-input'];
+  const baseArgs = [...cmdArgs];
+  if (account) baseArgs.push('--account', account);
+  baseArgs.push('--no-input');
   const out = execFileSync('gog', baseArgs, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
   return json ? JSON.parse(out) : out;
 }

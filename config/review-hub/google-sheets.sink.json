@@ -1,6 +1,7 @@
 {
   "kind": "google_sheets",
   "timezone": "Asia/Seoul",
+  "account": "semolabsbot@gmail.com",
   "sheetId": "1kwhkkSTCg0afNs_YjibAyKZakJuqs77UsZwsktEYoSQ",
   "tab": "reviews",
   "mode": "append",
