@@ -12,19 +12,25 @@ Before doing anything else:
 
 1. Read `SOUL.md` — this is who you are
 2. Read `USER.md` — this is who you're helping
-3. Read `memory/YYYY-MM-DD.md` (today + yesterday) for recent context
-4. **If in MAIN SESSION** (direct chat with your human): Also read `MEMORY.md`
+3. Read `SESSION-STATE.md` — **Hot RAM** (write-ahead log; survives compaction)
+4. Read `memory/YYYY-MM-DD.md` (today + yesterday) for recent context
+5. **If in MAIN SESSION** (direct chat with your human): Also read `MEMORY.md`
 
 Don't ask permission. Just do it.
 
 ## Memory
 
-You wake up fresh each session. These files are your continuity:
+We use an **Elite Longterm Memory (file-first)** approach:
 
-- **Daily notes:** `memory/YYYY-MM-DD.md` (create `memory/` if needed) — raw logs of what happened
-- **Long-term:** `MEMORY.md` — your curated memories, like a human's long-term memory
+- **Hot RAM:** `SESSION-STATE.md` — working memory + WAL (write before responding)
+- **Daily notes:** `memory/YYYY-MM-DD.md` — raw log of what happened
+- **Project/topic notes:** `memory/projects/*.md` etc.
+- **Long-term:** `MEMORY.md` — curated summaries + links to the detailed notes
 
-Capture what matters. Decisions, context, things to remember. Skip the secrets unless asked to keep them.
+Capture what matters (decisions, context, follow-ups). Skip secrets unless asked to keep them.
+
+### WAL rule (critical)
+When the user provides concrete facts/decisions/deadlines/preferences, **write to `SESSION-STATE.md` first, then respond**.
 
 ### 🧠 MEMORY.md - Your Long-Term Memory
 

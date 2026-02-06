@@ -5,7 +5,9 @@ agent-*/
 agent-main-*/
 
 # Personal memory (do not commit)
+MEMORY.md
 memory/**
+SESSION-STATE.md
 
 # Logs (keep jira-voice scaffolding)
 logs/**
