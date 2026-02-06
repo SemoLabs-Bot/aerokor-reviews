@@ -17,5 +17,14 @@ logs/**
 !logs/jira-voice/transcripts/
 !logs/jira-voice/transcripts/.gitkeep
 
+# State / caches
+state/**
+.clawhub/**
+
+# Potentially sensitive local auth artifacts
+meta_auth.json
+config/gog/**
+!config/gog/README.md
+
 # OS / editor
 .DS_Store

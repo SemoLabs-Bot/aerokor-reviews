@@ -1,0 +1,30 @@
+{
+  "kind": "google_sheets",
+  "timezone": "Asia/Seoul",
+  "sheetId": "1kwhkkSTCg0afNs_YjibAyKZakJuqs77UsZwsktEYoSQ",
+  "tab": "reviews",
+  "mode": "append",
+  "dedup": {
+    "strategy": "composite_sha256",
+    "fields": ["platform", "product_url", "author", "review_date", "body_hash"],
+    "keyColumn": "dedup_key",
+    "localStatePath": "state/review-hub/dedup-keys.txt"
+  },
+  "columns": [
+    "collected_date",
+    "collected_at",
+    "brand",
+    "platform",
+    "product_name",
+    "product_url",
+    "review_id",
+    "review_date",
+    "rating",
+    "author",
+    "title",
+    "body",
+    "body_hash",
+    "dedup_key",
+    "source_url"
+  ]
+}
