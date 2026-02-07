@@ -2,9 +2,11 @@
   "kind": "google_sheets",
   "timezone": "Asia/Seoul",
   "account": "semolabsbot@gmail.com",
-  "sheetId": "1kwhkkSTCg0afNs_YjibAyKZakJuqs77UsZwsktEYoSQ",
-  "tab": "reviews",
+  "sheetId": "1hIRtmAw1k8ajicstoi2eI5Vp0pc6xSJE8HOL7ZlyVTU",
+  "tab": "시트1",
+  "appendRange": "시트1!A3:O",
   "mode": "append",
+  "reviewLookbackDays": 0,
   "dedup": {
     "strategy": "composite_sha256",
     "fields": ["platform", "product_url", "author", "review_date", "body_hash"],
