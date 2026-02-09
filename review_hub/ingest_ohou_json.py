@@ -8,6 +8,7 @@ from typing import Any, Dict, List
 
 from review_hub.sheets_client import GogSheetsClient
 from review_hub.state import TextSet
+from review_hub.sheets_admin import ensure_tab_row_capacity
 
 WORKSPACE_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 
@@ -157,6 +158,21 @@ def main(in_path: str):
         # For large batches (especially with long review bodies), this can exceed OS argv limits.
         # So we append in small chunks.
         tab = sink.get("tab") or "main_review"
+
+        # Ensure the destination tab has enough rows (Google Sheets grid limit).
+        creds_path = os.path.expanduser("~/Library/Application Support/gogcli/credentials.json")
+        try:
+            ensure_tab_row_capacity(
+                spreadsheet_id=sink["sheetId"],
+                account_email=sink["account"],
+                tab_title=tab,
+                min_rows=50000,
+                credentials_path=creds_path,
+            )
+        except Exception:
+            # If this fails, we'll still try appending; gog will surface the Sheets error.
+            pass
+
         batch_size = int(os.environ.get("REVIEW_HUB_SHEETS_BATCH") or "20")
         batch_size = max(1, min(batch_size, 200))
 

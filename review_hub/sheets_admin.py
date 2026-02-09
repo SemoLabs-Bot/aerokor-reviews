@@ -185,3 +185,85 @@ def ensure_tabs_exist(
         )
         created.append(t)
     return created
+
+
+def ensure_tab_row_capacity(
+    *,
+    spreadsheet_id: str,
+    account_email: str,
+    tab_title: str,
+    min_rows: int,
+    credentials_path: str,
+) -> bool:
+    """Ensure a sheet tab has at least min_rows rows.
+
+    Returns True if it modified the sheet.
+    """
+    min_rows = int(min_rows)
+    if min_rows <= 0:
+        return False
+
+    md = sheets_metadata_via_gog(spreadsheet_id=spreadsheet_id, account_email=account_email)
+    sheet_id = None
+    cur_rows = None
+    for s in (md.get("sheets") or []):
+        props = (s or {}).get("properties") or {}
+        if props.get("title") == tab_title:
+            sheet_id = props.get("sheetId")
+            gp = props.get("gridProperties") or {}
+            cur_rows = int(gp.get("rowCount") or 0)
+            break
+
+    if sheet_id is None:
+        raise RuntimeError(f"tab not found: {tab_title}")
+
+    if cur_rows is not None and cur_rows >= min_rows:
+        return False
+
+    with open(credentials_path, "r", encoding="utf-8") as f:
+        creds = json.load(f)
+    client_id = creds["client_id"]
+    client_secret = creds["client_secret"]
+
+    refresh_token = get_refresh_token_via_gog(account_email=account_email)
+    access_token = exchange_refresh_for_access_token(
+        client_id=client_id,
+        client_secret=client_secret,
+        refresh_token=refresh_token,
+    )
+
+    body = {
+        "requests": [
+            {
+                "updateSheetProperties": {
+                    "properties": {
+                        "sheetId": int(sheet_id),
+                        "gridProperties": {"rowCount": int(min_rows)},
+                    },
+                    "fields": "gridProperties.rowCount",
+                }
+            }
+        ]
+    }
+
+    out = subprocess.check_output(
+        [
+            "curl",
+            "-s",
+            "-X",
+            "POST",
+            f"https://sheets.googleapis.com/v4/spreadsheets/{spreadsheet_id}:batchUpdate",
+            "-H",
+            f"Authorization: Bearer {access_token}",
+            "-H",
+            "Content-Type: application/json",
+            "--data-binary",
+            json.dumps(body, ensure_ascii=False),
+        ]
+    ).decode("utf-8")
+
+    j = json.loads(out) if out.strip().startswith("{") else {"text": out}
+    if isinstance(j, dict) and j.get("error"):
+        raise RuntimeError(json.dumps(j, ensure_ascii=False))
+
+    return True
