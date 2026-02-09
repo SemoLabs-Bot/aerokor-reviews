@@ -73,13 +73,16 @@ body{
 .field{display:flex;flex-direction:column;gap:6px;margin-bottom:10px}
 .field > span{font-size:11px;color:var(--muted)}
 .field input,.field select{
+  width: 100%;
+  height: 40px;
   background:rgba(15,23,48,.85);
   border:1px solid var(--border);
   color:var(--text);
   border-radius:10px;
-  padding:10px 10px;
+  padding:0 10px;
   outline:none;
 }
+.field input[type="date"]{padding:0 8px}
 .field input:focus,.field select:focus{border-color:rgba(92,200,255,.55)}
 
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
@@ -128,7 +131,7 @@ button:hover{filter:brightness(1.05)}
   border:1px solid var(--border);
   border-radius:12px;
   overflow:hidden;
-  background:rgba(15,23,48,.65);
+  background:rgba(11,16,32,.55);
 }
 
 /* header */
@@ -138,29 +141,28 @@ button:hover{filter:brightness(1.05)}
 }
 .tabulator .tabulator-col{
   background:transparent;
-  color:rgba(231,236,255,.85);
+  color:rgba(231,236,255,.88);
   border-right:1px solid var(--border);
 }
 .tabulator .tabulator-col-title{font-weight:800; letter-spacing:.2px}
 
-/* body */
-.tabulator .tabulator-tableholder{background:rgba(11,16,32,.25)}
+/* body: force dark table so text is readable */
+.tabulator .tabulator-tableholder{background:rgba(11,16,32,.55)}
 .tabulator .tabulator-row{
-  background:transparent;
+  background:rgba(11,16,32,.35);
   border-bottom:1px solid var(--border);
 }
+.tabulator .tabulator-row:nth-child(even){background:rgba(11,16,32,.48)}
 .tabulator .tabulator-row .tabulator-cell{
+  background:transparent !important;
   color:rgba(245,248,255,.98) !important;
+  border-right:1px solid rgba(255,255,255,.06);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-/* Make product_name stand out a bit less neon */
-.tabulator .tabulator-row .tabulator-cell[tabulator-field="product_name"]{
-  color:rgba(239,244,255,.98) !important;
-}
-.tabulator .tabulator-row.tabulator-selected{background:rgba(92,200,255,.12)}
+.tabulator .tabulator-row.tabulator-selected{background:rgba(92,200,255,.14)}
 .tabulator .tabulator-row:hover{background:rgba(92,200,255,.10)}
 
 /* footer */
@@ -170,7 +172,7 @@ button:hover{filter:brightness(1.05)}
 }
 
 /* links */
-.tabulator a{color:var(--accent); text-decoration:none; font-weight:700}
+.tabulator a{color:var(--accent); text-decoration:none; font-weight:800}
 .tabulator a:hover{text-decoration:underline}
 
 .review-body{
