@@ -10,6 +10,7 @@
 }
 
 *{box-sizing:border-box}
+html, body{overflow-x:hidden; width:100%}
 body{
   margin:0;
   font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
@@ -49,9 +50,10 @@ body{
 
 .layout{
   display:grid;
-  grid-template-columns: 320px 1fr;
+  grid-template-columns: 320px minmax(0, 1fr);
   gap:14px;
   padding:14px 14px 18px;
+  max-width: 100%;
 }
 
 .sidebar{
@@ -102,6 +104,7 @@ button:hover{filter:brightness(1.05)}
   border-radius:999px;
   border:1px solid var(--border);
   background:rgba(15,23,48,.7);
+  color: rgba(231,236,255,.92);
   font-size:12px;
   cursor:pointer;
 }
@@ -113,6 +116,8 @@ button:hover{filter:brightness(1.05)}
   border-radius:14px;
   padding:12px;
   min-height: calc(100vh - 110px);
+  min-width: 0;
+  overflow: hidden;
 }
 .table-header{display:flex;justify-content:space-between;gap:10px;align-items:flex-end;margin-bottom:10px}
 .table-title{font-size:14px;font-weight:900}
@@ -145,7 +150,15 @@ button:hover{filter:brightness(1.05)}
   border-bottom:1px solid var(--border);
 }
 .tabulator .tabulator-row .tabulator-cell{
-  color:rgba(231,236,255,.92);
+  color:rgba(245,248,255,.98) !important;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Make product_name stand out a bit less neon */
+.tabulator .tabulator-row .tabulator-cell[tabulator-field="product_name"]{
+  color:rgba(239,244,255,.98) !important;
 }
 .tabulator .tabulator-row.tabulator-selected{background:rgba(92,200,255,.12)}
 .tabulator .tabulator-row:hover{background:rgba(92,200,255,.10)}
