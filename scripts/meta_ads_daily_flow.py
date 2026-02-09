@@ -274,17 +274,20 @@ def build_values_with_formula(rows: list[list], start_row: int) -> list[list]:
     return values
 
 
-def send_email(report_date: str) -> str:
-    """Send link-only-ish email (kept simple).
+def send_email(label: str) -> str:
+    """Send notification email after sheet update.
+
+    - Single day: label = YYYY-MM-DD
+    - Batch (Fri~Sun): label = YYYY-MM-DD~YYYY-MM-DD
 
     Note: templates/ mention "link only" but current body includes a short greeting.
     Keeping existing behavior for now.
     """
     sheet_url = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/edit"
-    subject = f"[메타광고 일자별 보고서] {report_date} 데이터 업데이트 완료 (Google Sheets 링크)"
+    subject = f"[메타광고 일자별 보고서] {label} 데이터 업데이트 완료 (Google Sheets 링크)"
     body = (
         "안녕하세요.\n"
-        f"메타 광고 일자별 보고서({report_date}, KST) 기준으로 데이터 업데이트 완료된 구글 시트 링크 공유드립니다.\n\n"
+        f"메타 광고 일자별 보고서({label}, KST) 기준으로 데이터 업데이트 완료된 구글 시트 링크 공유드립니다.\n\n"
         f"- 문서 링크: {sheet_url}\n\n"
         "확인 부탁드립니다.\n"
         "감사합니다.\n"
@@ -403,6 +406,8 @@ def main() -> int:
             if missing:
                 raise FlowStop(f"XLSX에 기대한 날짜가 일부 없음: {missing}")
 
+            ok_dates: list[str] = []
+
             for d in expected_dates:
                 rows_for_day = by_date.get(d) or []
                 if not rows_for_day:
@@ -420,13 +425,12 @@ def main() -> int:
 
                 gog_update(target_range, values, user_entered=True)
 
-                message_id = send_email(d)
+                ok_dates.append(d)
                 results.append({
                     "date": d,
                     "status": "ok",
                     "rows": len(values),
                     "range": target_range,
-                    "email_message_id": message_id,
                 })
 
             # formats (whole columns) once
@@ -441,6 +445,12 @@ def main() -> int:
                 "userEnteredFormat.numberFormat",
             )
 
+            # Batch email: send only ONE email per range, only if something was appended.
+            batch_email_message_id = ""
+            if ok_dates:
+                batch_email_message_id = send_email(f"{start}~{end}")
+                (OUT_DIR / "email_message_id.txt").write_text(str(batch_email_message_id), encoding="utf-8")
+
             (OUT_DIR / "batch_results.json").write_text(json.dumps(results, ensure_ascii=False, indent=2), encoding="utf-8")
 
             print(json.dumps({
@@ -448,6 +458,7 @@ def main() -> int:
                 "mode": "batch",
                 "range": f"{start}..{end}",
                 "results": results,
+                "batch_email_message_id": batch_email_message_id,
                 "input_source": src_desc,
                 "out_dir": str(OUT_DIR),
             }, ensure_ascii=False, indent=2))
