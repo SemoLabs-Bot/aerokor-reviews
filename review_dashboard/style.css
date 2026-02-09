@@ -116,15 +116,17 @@ button:hover{filter:brightness(1.05)}
 .chips::-webkit-scrollbar{width:8px}
 .chips::-webkit-scrollbar-thumb{background:rgba(15,23,42,.18);border-radius:999px}
 .chip{
-  padding:8px 10px;
-  border-radius:999px;
-  border:1px solid var(--border);
-  background:rgba(255,255,255,.95);
+  padding:10px 4px;
+  border-radius:0;
+  border:none;
+  border-bottom:1px solid var(--border);
+  background:transparent;
   color: rgba(15,23,42,.92);
   font-size:12px;
   cursor:pointer;
   white-space: nowrap;
 }
+.chip:last-child{border-bottom:none}
 .chip:hover{border-color:rgba(92,200,255,.55)}
 
 .content{
