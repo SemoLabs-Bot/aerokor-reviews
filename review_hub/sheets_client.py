@@ -2,9 +2,12 @@ import json
 import os
 import re
 import subprocess
+import tempfile
+import time
 from typing import List, Optional
 
 from review_hub.lock import file_lock
+from review_hub.sheets_admin import get_refresh_token_via_gog, exchange_refresh_for_access_token
 
 
 def _run_quiet(cmd: list[str], *, env: dict):
@@ -22,6 +25,70 @@ def _env_account_cmd(account: Optional[str] = None):
 def _sheets_lock_path() -> str:
     # One global lock for all Sheets writes (across sessions)
     return os.path.join(os.path.expanduser("~"), ".openclaw", "locks", "review-hub-sheets.lock")
+
+
+_TOKEN_CACHE: dict[str, tuple[str, float]] = {}
+
+
+def _credentials_path() -> str:
+    return os.path.expanduser("~/Library/Application Support/gogcli/credentials.json")
+
+
+def _get_access_token(account: str) -> str:
+    """Get a Google Sheets API access token (cached briefly)."""
+    now = time.time()
+    tok, exp = _TOKEN_CACHE.get(account, ("", 0.0))
+    if tok and exp > now:
+        return tok
+
+    with open(_credentials_path(), "r", encoding="utf-8") as f:
+        creds = json.load(f)
+    rt = get_refresh_token_via_gog(account_email=account)
+    tok = exchange_refresh_for_access_token(
+        client_id=creds["client_id"],
+        client_secret=creds["client_secret"],
+        refresh_token=rt,
+    )
+    # Cache for ~45 minutes (access tokens are typically 1h)
+    _TOKEN_CACHE[account] = (tok, now + 45 * 60)
+    return tok
+
+
+def _api_values_update(*, account: str, spreadsheet_id: str, a1_range: str, values_2d: List[List[object]]):
+    """Update values via Sheets API using curl + temp file (avoids argv length limits)."""
+    token = _get_access_token(account)
+    url = (
+        f"https://sheets.googleapis.com/v4/spreadsheets/{spreadsheet_id}"
+        f"/values/{a1_range}?valueInputOption=RAW"
+    )
+    body = {"range": a1_range, "majorDimension": "ROWS", "values": values_2d}
+
+    fd, path = tempfile.mkstemp(prefix="sheets_update_", suffix=".json")
+    os.close(fd)
+    try:
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(body, f, ensure_ascii=False)
+        subprocess.check_call(
+            [
+                "curl",
+                "-s",
+                "-X",
+                "PUT",
+                url,
+                "-H",
+                f"Authorization: Bearer {token}",
+                "-H",
+                "Content-Type: application/json",
+                "--data-binary",
+                f"@{path}",
+            ],
+            stdout=subprocess.DEVNULL,
+        )
+    finally:
+        try:
+            os.remove(path)
+        except Exception:
+            pass
 
 
 class GogSheetsClient:
@@ -45,20 +112,31 @@ class GogSheetsClient:
         return data.get("values") or []
 
     def update(self, a1_range: str, values_2d: List[List[object]]):
-        cmd = [
-            "gog",
-            "sheets",
-            "update",
-            self.spreadsheet_id,
-            a1_range,
-            "--values-json",
-            json.dumps(values_2d, ensure_ascii=False),
-            "--input",
-            "RAW",
-            "--no-input",
-        ]
+        # If the payload is large (e.g., long review bodies), gog will pass it as a single
+        # CLI argument and can exceed OS argv length. In that case, use Sheets API via curl.
+        payload = json.dumps(values_2d, ensure_ascii=False)
         with file_lock(_sheets_lock_path()):
-            _run_quiet(cmd, env=_env_account_cmd(self.account))
+            if len(payload) > 20000:
+                _api_values_update(
+                    account=self.account,
+                    spreadsheet_id=self.spreadsheet_id,
+                    a1_range=a1_range,
+                    values_2d=values_2d,
+                )
+            else:
+                cmd = [
+                    "gog",
+                    "sheets",
+                    "update",
+                    self.spreadsheet_id,
+                    a1_range,
+                    "--values-json",
+                    payload,
+                    "--input",
+                    "RAW",
+                    "--no-input",
+                ]
+                _run_quiet(cmd, env=_env_account_cmd(self.account))
 
     def append(self, a1_range: str, values_2d: List[List[object]]):
         """Google Sheets 'append' API (table-heuristic). Use carefully."""
