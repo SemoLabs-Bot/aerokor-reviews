@@ -11,6 +11,15 @@ function uniq(arr) {
   return Array.from(new Set(arr.filter(Boolean)));
 }
 
+function escapeHtml(s) {
+  return String(s)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/\"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 function byText(x) {
   return String(x ?? "").toLowerCase();
 }
@@ -189,7 +198,15 @@ function initTable() {
       { title: "평점", field: "rating_num", width: 80, hozAlign: "right" },
       { title: "길이", field: "body_len", width: 80, hozAlign: "right" },
       { title: "작성자", field: "author", width: 110 },
-      { title: "제목", field: "title", minWidth: 180 },
+      { title: "제목", field: "title", minWidth: 160 },
+      { title: "본문", field: "body", minWidth: 260, formatter: (cell) => {
+          const v = String(cell.getValue() ?? "");
+          const s = v.replace(/\s+/g, " ").trim();
+          if (!s) return "";
+          const cut = s.length > 80 ? (s.slice(0, 80) + "…") : s;
+          return `<span class="body-snippet">${escapeHtml(cut)}</span>`;
+        }
+      },
       { title: "수집시각", field: "collected_at", width: 170 },
       { title: "링크", field: "source_url", width: 90, formatter: (cell) => {
           const v = cell.getValue();
@@ -211,9 +228,15 @@ function initTable() {
       const meta = document.createElement("div");
       meta.className = "review-meta";
       meta.textContent = `platform=${data.platform || ""} · product_url=${data.product_url ? "(있음)" : ""} · review_id=${data.review_id || ""}`;
+      const ttl = document.createElement("div");
+      ttl.style.fontWeight = "600";
+      ttl.textContent = data.title ? `제목: ${data.title}` : "";
+
       const txt = document.createElement("div");
       txt.textContent = data.body || "";
+
       body.appendChild(meta);
+      if (ttl.textContent) body.appendChild(ttl);
       body.appendChild(txt);
       el.appendChild(body);
     },

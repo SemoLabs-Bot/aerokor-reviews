@@ -201,11 +201,15 @@ button:hover{filter:brightness(1.05)}
 .review-body{
   padding:10px 12px;
   line-height:1.55;
-  color:rgba(231,236,255,.92);
-  background:rgba(11,16,32,.55);
-  border-top:1px dashed rgba(255,255,255,.12);
+  color:var(--text);
+  background:rgba(245,247,252,.9);
+  border-top:1px dashed rgba(0,0,0,.08);
 }
 .review-meta{font-size:11px;color:var(--muted);margin-bottom:6px}
+
+.body-snippet{
+  color:var(--text);
+}
 
 @media (max-width: 1100px){
   .layout{grid-template-columns:1fr}

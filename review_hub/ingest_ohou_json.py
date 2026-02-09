@@ -99,8 +99,9 @@ def main(in_path: str):
     collected_date = now.date().isoformat()
     collected_at = now.isoformat()
 
-    rows: List[List[object]] = []
+    rows_to_append: List[List[object]] = []
     new_keys: List[str] = []
+    rows_to_update: List[tuple[int, List[object]]] = []
 
     for r in reviews:
         product_url = str(r.get("product_url") or r.get("productUrl") or r.get("source_url") or r.get("sourceUrl") or "")
@@ -130,12 +131,9 @@ def main(in_path: str):
             review_date,
             body_hash,
         ]))
-        if dedup_key in seen:
-            continue
-        seen.add(dedup_key)
-        new_keys.append(dedup_key)
-
-        rows.append([
+        # We UPSERT by dedup_key: if it already exists on the sheet, update that row;
+        # otherwise append a new row.
+        row_payload = [
             collected_date,
             collected_at,
             str(r.get("brand") or ""),
@@ -151,12 +149,17 @@ def main(in_path: str):
             body_hash,
             dedup_key,
             source_url,
-        ])
+        ]
 
-    if rows:
+        rows_to_append.append(row_payload)
+
+    reviews_appended = 0
+    reviews_updated = 0
+
+    if rows_to_append:
         # WARNING: gog passes values as a single CLI argument (--values-json ...).
         # For large batches (especially with long review bodies), this can exceed OS argv limits.
-        # So we append in small chunks.
+        # SheetsClient.update() already has a curl+API fallback for large payloads.
         tab = sink.get("tab") or "main_review"
 
         # Ensure the destination tab has enough rows (Google Sheets grid limit).
@@ -172,34 +175,112 @@ def main(in_path: str):
         batch_size = int(os.environ.get("REVIEW_HUB_SHEETS_BATCH") or "20")
         batch_size = max(1, min(batch_size, 200))
 
-        # Compute next_row ONCE (avoid scanning 20k rows for every chunk).
+        # Build an index of existing dedup_key -> row number (single scan).
         import re
-        scan_range = f"{tab}!A3:A20002"
-        col_vals = client.get(scan_range)
-        pat = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+
+        max_scan_row = int(os.environ.get("REVIEW_HUB_SHEETS_MAX_SCAN_ROW") or "50000")
+        colA = client.get(f"{tab}!A3:A{max_scan_row}")
+        colN = client.get(f"{tab}!N3:N{max_scan_row}")
+
+        key_to_row: Dict[str, int] = {}
+        pat_date = re.compile(r"^\d{4}-\d{2}-\d{2}$")
         last = 2
-        for i, row in enumerate(col_vals, start=3):
-            v = row[0] if row else ""
-            if isinstance(v, str) and pat.search(v.strip()):
-                last = i
-        next_row = last + 1
+        for i in range(0, max(len(colA), len(colN))):
+            rownum = 3 + i
+            a = (colA[i][0] if i < len(colA) and colA[i] else "").strip()
+            k = (colN[i][0] if i < len(colN) and colN[i] else "").strip()
+            if a and isinstance(a, str) and pat_date.search(a.strip()):
+                last = rownum
+            if a and k:
+                # keep first occurrence
+                if k not in key_to_row:
+                    key_to_row[k] = rownum
 
-        # Append in chunks using explicit update ranges (fast) and persist dedup keys per chunk
-        # so retries won't duplicate already-written rows.
-        for i in range(0, len(rows), batch_size):
-            chunk = rows[i : i + batch_size]
-            end_row = next_row + len(chunk) - 1
-            write_range = f"{tab}!A{next_row}:O{end_row}"
-            client.update(write_range, chunk)
+        # Split incoming rows into updates vs appends.
+        to_update: List[tuple[int, List[object]]] = []
+        to_append: List[List[object]] = []
 
-            # incrementally persist dedup keys for this chunk
-            dedup_state.add_many(new_keys[i : i + batch_size])
+        for row in rows_to_append:
+            k = str(row[13] or "").strip()
+            if k and k in key_to_row:
+                to_update.append((key_to_row[k], row))
+            else:
+                to_append.append(row)
+                if k:
+                    new_keys.append(k)
 
-            next_row = end_row + 1
+        # UPSERT updates (group contiguous rows to reduce API calls).
+        if to_update:
+            to_update.sort(key=lambda x: x[0])
+            run_start = None
+            run_rows: List[List[object]] = []
+            prev = None
 
-        print(json.dumps({"appended": len(rows), "batches": (len(rows) + batch_size - 1) // batch_size}, ensure_ascii=False))
+            def flush_run():
+                nonlocal reviews_updated, run_start, run_rows
+                if run_start is None or not run_rows:
+                    return
+                end = run_start + len(run_rows) - 1
+                client.update(f"{tab}!A{run_start}:O{end}", run_rows)
+                reviews_updated += len(run_rows)
+                run_start = None
+                run_rows = []
 
-    print(json.dumps({"reviews_seen": len(reviews), "reviews_appended": len(rows), "dedup_added": len(new_keys)}, ensure_ascii=False))
+            for rownum, payload_row in to_update:
+                if run_start is None:
+                    run_start = rownum
+                    run_rows = [payload_row]
+                    prev = rownum
+                    continue
+                if rownum == prev + 1:
+                    run_rows.append(payload_row)
+                    prev = rownum
+                else:
+                    flush_run()
+                    run_start = rownum
+                    run_rows = [payload_row]
+                    prev = rownum
+
+            flush_run()
+
+        # Append new rows at the end (fast).
+        if to_append:
+            next_row = last + 1
+            for i in range(0, len(to_append), batch_size):
+                chunk = to_append[i : i + batch_size]
+                end_row = next_row + len(chunk) - 1
+                write_range = f"{tab}!A{next_row}:O{end_row}"
+                client.update(write_range, chunk)
+                reviews_appended += len(chunk)
+
+                # Persist dedup keys for appended rows only.
+                dedup_state.add_many(new_keys[i : i + len(chunk)])
+
+                next_row = end_row + 1
+
+        print(
+            json.dumps(
+                {
+                    "upsert": True,
+                    "updated": reviews_updated,
+                    "appended": reviews_appended,
+                    "append_batches": (len(to_append) + batch_size - 1) // batch_size if to_append else 0,
+                },
+                ensure_ascii=False,
+            )
+        )
+
+    print(
+        json.dumps(
+            {
+                "reviews_seen": len(reviews),
+                "reviews_appended": reviews_appended,
+                "reviews_updated": reviews_updated,
+                "dedup_added": len(new_keys),
+            },
+            ensure_ascii=False,
+        )
+    )
 
 
 if __name__ == "__main__":
