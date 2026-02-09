@@ -105,15 +105,18 @@ button:hover{filter:brightness(1.05)}
 
 .hint{font-size:11px;color:var(--muted);margin-top:10px;line-height:1.4}
 
-.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chips{display:flex;flex-wrap:nowrap;gap:8px;overflow-x:auto;padding-bottom:4px}
+.chips::-webkit-scrollbar{height:8px}
+.chips::-webkit-scrollbar-thumb{background:rgba(15,23,42,.18);border-radius:999px}
 .chip{
   padding:8px 10px;
   border-radius:999px;
   border:1px solid var(--border);
-  background:rgba(15,23,48,.7);
-  color: rgba(231,236,255,.92);
+  background:rgba(255,255,255,.95);
+  color: rgba(15,23,42,.92);
   font-size:12px;
   cursor:pointer;
+  white-space: nowrap;
 }
 .chip:hover{border-color:rgba(92,200,255,.55)}
 
