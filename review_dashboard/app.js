@@ -4,6 +4,8 @@ const DATA_URL = "../data/reviews.json";
 
 let ALL = [];
 let table;
+let TABLE_BUILT = false;
+let PENDING_DATA = null;
 
 function uniq(arr) {
   return Array.from(new Set(arr.filter(Boolean)));
@@ -107,9 +109,14 @@ function applyFilters() {
   };
   filtered.sort(sorters[sort] || sorters.review_date_desc);
 
-  table.setData(filtered);
-  // Tabulator sometimes needs a forced redraw after CSS/layout changes.
-  try { table.redraw(true); } catch (e) {}
+  // If Tabulator hasn't finished building yet, queue data to avoid "Table Not Initialized" warnings.
+  if (!TABLE_BUILT) {
+    PENDING_DATA = filtered;
+  } else {
+    table.setData(filtered);
+    // Tabulator sometimes needs a forced redraw after CSS/layout changes.
+    try { table.redraw(true); } catch (e) {}
+  }
 
   const st = computeStats(filtered);
   document.getElementById("statCount").textContent = st.n.toLocaleString();
@@ -212,6 +219,16 @@ function initTable() {
     },
   });
 
+  table.on("tableBuilt", () => {
+    TABLE_BUILT = true;
+    // If data arrived before the table finished building, apply it now.
+    if (PENDING_DATA) {
+      table.setData(PENDING_DATA);
+      try { table.redraw(true); } catch (e) {}
+      PENDING_DATA = null;
+    }
+  });
+
   // expose for debugging (avoid collision with window.table named access)
   window.__tabulator = table;
 }
@@ -234,6 +251,7 @@ async function main() {
 
   initTable();
   buildChips();
+  // Initial render will happen after Tabulator emits tableBuilt.
   applyFilters();
 
   document.getElementById("apply").onclick = applyFilters;
