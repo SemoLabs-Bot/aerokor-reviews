@@ -375,7 +375,7 @@ def fetch_reviews_for_goods_ids_openclaw(
                     rating = float(rating) if rating is not None else None
                 except Exception:
                     rating = None
-                body = str(review_obj.get("comment") or "")
+                body = str(review_obj.get("comment") or r.get("comment") or r.get("content") or "")
 
                 prod = r.get("productionInformation") if isinstance(r.get("productionInformation"), dict) else {}
                 product_name = str(prod.get("name") or "")
