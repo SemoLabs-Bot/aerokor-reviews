@@ -161,17 +161,13 @@ def main(in_path: str):
 
         # Ensure the destination tab has enough rows (Google Sheets grid limit).
         creds_path = os.path.expanduser("~/Library/Application Support/gogcli/credentials.json")
-        try:
-            ensure_tab_row_capacity(
-                spreadsheet_id=sink["sheetId"],
-                account_email=sink["account"],
-                tab_title=tab,
-                min_rows=50000,
-                credentials_path=creds_path,
-            )
-        except Exception:
-            # If this fails, we'll still try appending; gog will surface the Sheets error.
-            pass
+        ensure_tab_row_capacity(
+            spreadsheet_id=sink["sheetId"],
+            account_email=sink["account"],
+            tab_title=tab,
+            min_rows=50000,
+            credentials_path=creds_path,
+        )
 
         batch_size = int(os.environ.get("REVIEW_HUB_SHEETS_BATCH") or "20")
         batch_size = max(1, min(batch_size, 200))

@@ -203,7 +203,32 @@ def ensure_tab_row_capacity(
     if min_rows <= 0:
         return False
 
-    md = sheets_metadata_via_gog(spreadsheet_id=spreadsheet_id, account_email=account_email)
+    with open(credentials_path, "r", encoding="utf-8") as f:
+        creds = json.load(f)
+    client_id = creds["client_id"]
+    client_secret = creds["client_secret"]
+
+    refresh_token = get_refresh_token_via_gog(account_email=account_email)
+    access_token = exchange_refresh_for_access_token(
+        client_id=client_id,
+        client_secret=client_secret,
+        refresh_token=refresh_token,
+    )
+
+    # Fetch sheet properties via Sheets API to reliably get sheetId.
+    md_text = subprocess.check_output(
+        [
+            "curl",
+            "-s",
+            "-X",
+            "GET",
+            f"https://sheets.googleapis.com/v4/spreadsheets/{spreadsheet_id}?fields=sheets.properties",
+            "-H",
+            f"Authorization: Bearer {access_token}",
+        ]
+    ).decode("utf-8")
+    md = json.loads(md_text)
+
     sheet_id = None
     cur_rows = None
     for s in (md.get("sheets") or []):
@@ -219,18 +244,6 @@ def ensure_tab_row_capacity(
 
     if cur_rows is not None and cur_rows >= min_rows:
         return False
-
-    with open(credentials_path, "r", encoding="utf-8") as f:
-        creds = json.load(f)
-    client_id = creds["client_id"]
-    client_secret = creds["client_secret"]
-
-    refresh_token = get_refresh_token_via_gog(account_email=account_email)
-    access_token = exchange_refresh_for_access_token(
-        client_id=client_id,
-        client_secret=client_secret,
-        refresh_token=refresh_token,
-    )
 
     body = {
         "requests": [
