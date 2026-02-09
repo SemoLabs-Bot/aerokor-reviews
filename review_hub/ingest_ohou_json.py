@@ -172,20 +172,32 @@ def main(in_path: str):
         batch_size = int(os.environ.get("REVIEW_HUB_SHEETS_BATCH") or "20")
         batch_size = max(1, min(batch_size, 200))
 
+        # Compute next_row ONCE (avoid scanning 20k rows for every chunk).
+        import re
+        scan_range = f"{tab}!A3:A20002"
+        col_vals = client.get(scan_range)
+        pat = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+        last = 2
+        for i, row in enumerate(col_vals, start=3):
+            v = row[0] if row else ""
+            if isinstance(v, str) and pat.search(v.strip()):
+                last = i
+        next_row = last + 1
+
+        # Append in chunks using explicit update ranges (fast) and persist dedup keys per chunk
+        # so retries won't duplicate already-written rows.
         for i in range(0, len(rows), batch_size):
             chunk = rows[i : i + batch_size]
-            client.append_fixed(
-                tab=tab,
-                start_row=3,
-                start_col="A",
-                end_col="O",
-                values_2d=chunk,
-                sentinel_col="A",
-                sentinel_regex=r"^\d{4}-\d{2}-\d{2}$",
-                scan_max_rows=20000,
-            )
+            end_row = next_row + len(chunk) - 1
+            write_range = f"{tab}!A{next_row}:O{end_row}"
+            client.update(write_range, chunk)
 
-        dedup_state.add_many(new_keys)
+            # incrementally persist dedup keys for this chunk
+            dedup_state.add_many(new_keys[i : i + batch_size])
+
+            next_row = end_row + 1
+
+        print(json.dumps({"appended": len(rows), "batches": (len(rows) + batch_size - 1) // batch_size}, ensure_ascii=False))
 
     print(json.dumps({"reviews_seen": len(reviews), "reviews_appended": len(rows), "dedup_added": len(new_keys)}, ensure_ascii=False))
 
