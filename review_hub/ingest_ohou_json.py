@@ -153,16 +153,26 @@ def main(in_path: str):
         ])
 
     if rows:
-        client.append_fixed(
-            tab=sink.get("tab") or "시트1",
-            start_row=3,
-            start_col="A",
-            end_col="O",
-            values_2d=rows,
-            sentinel_col="A",
-            sentinel_regex=r"^\d{4}-\d{2}-\d{2}$",
-            scan_max_rows=20000,
-        )
+        # WARNING: gog passes values as a single CLI argument (--values-json ...).
+        # For large batches (especially with long review bodies), this can exceed OS argv limits.
+        # So we append in small chunks.
+        tab = sink.get("tab") or "main_review"
+        batch_size = int(os.environ.get("REVIEW_HUB_SHEETS_BATCH") or "20")
+        batch_size = max(1, min(batch_size, 200))
+
+        for i in range(0, len(rows), batch_size):
+            chunk = rows[i : i + batch_size]
+            client.append_fixed(
+                tab=tab,
+                start_row=3,
+                start_col="A",
+                end_col="O",
+                values_2d=chunk,
+                sentinel_col="A",
+                sentinel_regex=r"^\d{4}-\d{2}-\d{2}$",
+                scan_max_rows=20000,
+            )
+
         dedup_state.add_many(new_keys)
 
     print(json.dumps({"reviews_seen": len(reviews), "reviews_appended": len(rows), "dedup_added": len(new_keys)}, ensure_ascii=False))
