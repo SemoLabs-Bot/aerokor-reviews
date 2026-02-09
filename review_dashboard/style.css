@@ -125,11 +125,40 @@ button:hover{filter:brightness(1.05)}
   overflow:hidden;
   background:rgba(15,23,48,.65);
 }
-.tabulator .tabulator-header{background:rgba(15,23,48,.9);border-bottom:1px solid var(--border)}
-.tabulator .tabulator-col{background:transparent;color:var(--muted);border-right:1px solid var(--border)}
-.tabulator .tabulator-row{background:transparent;color:var(--text);border-bottom:1px solid var(--border)}
-.tabulator .tabulator-row:hover{background:rgba(92,200,255,.08)}
-.tabulator .tabulator-footer{background:rgba(15,23,48,.9);border-top:1px solid var(--border)}
+
+/* header */
+.tabulator .tabulator-header{
+  background:rgba(15,23,48,.92);
+  border-bottom:1px solid var(--border);
+}
+.tabulator .tabulator-col{
+  background:transparent;
+  color:rgba(231,236,255,.85);
+  border-right:1px solid var(--border);
+}
+.tabulator .tabulator-col-title{font-weight:800; letter-spacing:.2px}
+
+/* body */
+.tabulator .tabulator-tableholder{background:rgba(11,16,32,.25)}
+.tabulator .tabulator-row{
+  background:transparent;
+  border-bottom:1px solid var(--border);
+}
+.tabulator .tabulator-row .tabulator-cell{
+  color:rgba(231,236,255,.92);
+}
+.tabulator .tabulator-row.tabulator-selected{background:rgba(92,200,255,.12)}
+.tabulator .tabulator-row:hover{background:rgba(92,200,255,.10)}
+
+/* footer */
+.tabulator .tabulator-footer{
+  background:rgba(15,23,48,.92);
+  border-top:1px solid var(--border);
+}
+
+/* links */
+.tabulator a{color:var(--accent); text-decoration:none; font-weight:700}
+.tabulator a:hover{text-decoration:underline}
 
 .review-body{
   padding:10px 12px;
