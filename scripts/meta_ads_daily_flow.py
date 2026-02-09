@@ -152,7 +152,7 @@ def acquire_fixed_xlsx(source: Path | None = None) -> tuple[Path, str]:
     return FIXED_XLSX, f"copied_from:{src}"
 
 
-def extract_values(xlsx_path: Path, expected_date: str) -> ExtractResult:
+def extract_values(xlsx_path: Path, expected_date: str | None) -> ExtractResult:
     wb = openpyxl.load_workbook(xlsx_path, data_only=True)
     ws = wb["Raw Data Report"] if "Raw Data Report" in wb.sheetnames else wb[wb.sheetnames[0]]
 
@@ -210,16 +210,20 @@ def extract_values(xlsx_path: Path, expected_date: str) -> ExtractResult:
             ]
         )
 
-    if len(dates) != 1:
-        raise FlowStop(f"XLSX 날짜가 단일일이 아님: {sorted(dates)}")
+    if expected_date is not None:
+        if len(dates) != 1:
+            raise FlowStop(f"XLSX 날짜가 단일일이 아님: {sorted(dates)}")
 
-    report_date = next(iter(dates))
-    if report_date != expected_date:
-        raise FlowStop(
-            f"날짜 검증 실패: expected={expected_date} but xlsx={report_date} (UI/계정 timezone 영향 가능)."
-        )
+        report_date = next(iter(dates))
+        if report_date != expected_date:
+            raise FlowStop(
+                f"날짜 검증 실패: expected={expected_date} but xlsx={report_date} (UI/계정 timezone 영향 가능)."
+            )
+        return ExtractResult(report_date=report_date, values=rows)
 
-    return ExtractResult(report_date=report_date, values=rows)
+    # Batch mode: caller will split by date later.
+    # Store a sentinel report_date; real per-date keys are in the row[3] values.
+    return ExtractResult(report_date="__BATCH__", values=rows)
 
 
 def sheet_last_row() -> int:
@@ -261,9 +265,9 @@ def sheet_has_date(report_date: str) -> bool:
     return False
 
 
-def build_values_with_formula(extracted: ExtractResult, start_row: int) -> list[list]:
-    values = []
-    for i, row in enumerate(extracted.values):
+def build_values_with_formula(rows: list[list], start_row: int) -> list[list]:
+    values: list[list] = []
+    for i, row in enumerate(rows):
         sheet_row = start_row + i
         row[12] = f"=IFERROR(VLOOKUP(L{sheet_row},'색인_제품'!A:B,2,FALSE),\"\")"
         values.append(row)
@@ -271,6 +275,11 @@ def build_values_with_formula(extracted: ExtractResult, start_row: int) -> list[
 
 
 def send_email(report_date: str) -> str:
+    """Send link-only-ish email (kept simple).
+
+    Note: templates/ mention "link only" but current body includes a short greeting.
+    Keeping existing behavior for now.
+    """
     sheet_url = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/edit"
     subject = f"[메타광고 일자별 보고서] {report_date} 데이터 업데이트 완료 (Google Sheets 링크)"
     body = (
@@ -317,17 +326,34 @@ def cleanup_fixed() -> None:
 
 
 def main() -> int:
-    # Default expected date: yesterday(KST). Can be overridden for cron batch runs.
-    expected = kst_yesterday()
+    # Default expected date: yesterday(KST). Can be overridden.
+    expected_single: str | None = kst_yesterday()
+
+    # Single-day mode: --date YYYY-MM-DD
     if "--date" in sys.argv:
         i = sys.argv.index("--date")
         try:
-            expected = sys.argv[i + 1]
+            expected_single = sys.argv[i + 1]
         except Exception:
             raise FlowStop("--date YYYY-MM-DD 형식으로 입력 필요")
 
+    # Range/batch mode: --start YYYY-MM-DD --end YYYY-MM-DD (inclusive)
+    start: str | None = None
+    end: str | None = None
+    if "--start" in sys.argv or "--end" in sys.argv:
+        if "--start" not in sys.argv or "--end" not in sys.argv:
+            raise FlowStop("--start YYYY-MM-DD --end YYYY-MM-DD 둘 다 필요")
+        try:
+            start = sys.argv[sys.argv.index("--start") + 1]
+            end = sys.argv[sys.argv.index("--end") + 1]
+        except Exception:
+            raise FlowStop("--start/--end YYYY-MM-DD 형식으로 입력 필요")
+        expected_single = None
+
     (OUT_DIR / "meta_url.txt").write_text(META_URL, encoding="utf-8")
-    (OUT_DIR / "expected_date.txt").write_text(expected, encoding="utf-8")
+    (OUT_DIR / "expected_date.txt").write_text(str(expected_single), encoding="utf-8")
+    if start and end:
+        (OUT_DIR / "expected_range.txt").write_text(f"{start}..{end}", encoding="utf-8")
 
     # Optional: allow a specific source XLSX (useful when export/download step is manual)
     source: Path | None = None
@@ -345,14 +371,99 @@ def main() -> int:
         # Keep an audit copy
         shutil.copy2(xlsx_path, OUT_DIR / "meta_export.xlsx")
 
-        extracted = extract_values(xlsx_path, expected)
+        extracted = extract_values(xlsx_path, expected_single)
 
-        if sheet_has_date(extracted.report_date):
-            raise FlowStop(f"중복 방지: 시트 D열에 {extracted.report_date}가 이미 존재 → append 중단")
+        results: list[dict] = []
 
+        if start and end:
+            # Batch mode: split by date within the XLSX and process each date independently.
+            from datetime import date as _date
+
+            s = datetime.fromisoformat(start).date()
+            e = datetime.fromisoformat(end).date()
+            if e < s:
+                raise FlowStop(f"날짜 범위가 역순임: start={start}, end={end}")
+
+            expected_dates = []
+            cur = s
+            while cur <= e:
+                expected_dates.append(cur.isoformat())
+                cur = cur + timedelta(days=1)
+
+            # group rows by date (row[3])
+            by_date: dict[str, list[list]] = {d: [] for d in expected_dates}
+            seen_dates: set[str] = set()
+            for r in extracted.values:
+                d = str(r[3])[:10]
+                if d in by_date:
+                    by_date[d].append(r)
+                    seen_dates.add(d)
+
+            missing = [d for d in expected_dates if d not in seen_dates]
+            if missing:
+                raise FlowStop(f"XLSX에 기대한 날짜가 일부 없음: {missing}")
+
+            for d in expected_dates:
+                rows_for_day = by_date.get(d) or []
+                if not rows_for_day:
+                    continue
+
+                if sheet_has_date(d):
+                    results.append({"date": d, "status": "skipped_duplicate"})
+                    continue
+
+                last = sheet_last_row()
+                start_row = last + 1
+                values = build_values_with_formula(rows_for_day, start_row)
+                end_row = start_row + len(values) - 1
+                target_range = f"{TAB}!A{start_row}:M{end_row}"
+
+                gog_update(target_range, values, user_entered=True)
+
+                message_id = send_email(d)
+                results.append({
+                    "date": d,
+                    "status": "ok",
+                    "rows": len(values),
+                    "range": target_range,
+                    "email_message_id": message_id,
+                })
+
+            # formats (whole columns) once
+            gog_format(
+                f"{TAB}!G1:J2000",
+                {"numberFormat": {"type": "NUMBER", "pattern": "#,##0"}},
+                "userEnteredFormat.numberFormat",
+            )
+            gog_format(
+                f"{TAB}!K1:K2000",
+                {"numberFormat": {"type": "PERCENT", "pattern": "0.0%"}},
+                "userEnteredFormat.numberFormat",
+            )
+
+            (OUT_DIR / "batch_results.json").write_text(json.dumps(results, ensure_ascii=False, indent=2), encoding="utf-8")
+
+            print(json.dumps({
+                "status": "ok",
+                "mode": "batch",
+                "range": f"{start}..{end}",
+                "results": results,
+                "input_source": src_desc,
+                "out_dir": str(OUT_DIR),
+            }, ensure_ascii=False, indent=2))
+            return 0
+
+        # Single-day mode
+        expected = expected_single
+        assert expected is not None
+
+        if sheet_has_date(expected):
+            raise FlowStop(f"중복 방지: 시트 D열에 {expected}가 이미 존재 → append 중단")
+
+        # extracted.values already validated to a single day; use extracted.report_date for email
         last = sheet_last_row()
         start_row = last + 1
-        values = build_values_with_formula(extracted, start_row)
+        values = build_values_with_formula(extracted.values, start_row)
         end_row = start_row + len(values) - 1
         target_range = f"{TAB}!A{start_row}:M{end_row}"
 
@@ -373,13 +484,14 @@ def main() -> int:
             "userEnteredFormat.numberFormat",
         )
 
-        message_id = send_email(extracted.report_date)
+        message_id = send_email(expected)
         (OUT_DIR / "email_message_id.txt").write_text(str(message_id), encoding="utf-8")
 
         print(json.dumps({
             "status": "ok",
+            "mode": "single",
             "expected": expected,
-            "report_date": extracted.report_date,
+            "report_date": expected,
             "rows": len(values),
             "range": target_range,
             "email_message_id": message_id,
