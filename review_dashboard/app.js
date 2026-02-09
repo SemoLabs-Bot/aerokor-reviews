@@ -108,6 +108,8 @@ function applyFilters() {
   filtered.sort(sorters[sort] || sorters.review_date_desc);
 
   table.setData(filtered);
+  // Tabulator sometimes needs a forced redraw after CSS/layout changes.
+  try { table.redraw(true); } catch (e) {}
 
   const st = computeStats(filtered);
   document.getElementById("statCount").textContent = st.n.toLocaleString();
@@ -164,6 +166,8 @@ function initTable() {
   table = new Tabulator("#table", {
     height: "calc(100vh - 210px)",
     layout: "fitColumns",
+    renderVertical: "virtual",
+    index: "dedup_key",
     responsiveLayout: "collapse",
     pagination: true,
     paginationSize: 50,
@@ -171,6 +175,7 @@ function initTable() {
     initialSort: [{ column: "review_date_norm", dir: "desc" }],
     columns: [
       { title: "리뷰일", field: "review_date_norm", width: 110 },
+
       { title: "브랜드", field: "brand", width: 110 },
       { title: "플랫폼", field: "platform", width: 110 },
       { title: "상품", field: "product_name", minWidth: 220 },
@@ -206,6 +211,9 @@ function initTable() {
       el.appendChild(body);
     },
   });
+
+  // expose for debugging (avoid collision with window.table named access)
+  window.__tabulator = table;
 }
 
 async function main() {
