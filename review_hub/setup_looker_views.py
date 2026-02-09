@@ -32,23 +32,64 @@ def main() -> None:
     client = GogSheetsClient(account=account, spreadsheet_id=sheet_id)
 
     # One-cell ARRAYFORMULA that mirrors raw rows and adds a few normalized fields for Looker Studio.
-    # Columns A:O are identical to raw (시트1). Additional columns:
+    # Columns A:O are identical to raw (main_review). Additional columns:
     # P: review_date_norm (best-effort), Q: rating_num, R: body_len
+    # IMPORTANT: Sheet locale is ko_KR, so function argument separators should be ';'.
+    # We'll write headers as plain values in row 1, and put the ARRAYFORMULA in A2.
+    headers = [[
+        "collected_date",
+        "collected_at",
+        "brand",
+        "platform",
+        "product_name",
+        "product_url",
+        "review_id",
+        "review_date",
+        "rating",
+        "author",
+        "title",
+        "body",
+        "body_hash",
+        "dedup_key",
+        "source_url",
+        "review_date_norm",
+        "rating_num",
+        "body_len",
+    ]]
+
+    # Use HSTACK to avoid locale-specific array-literal separators.
     formula = (
-        "=ARRAYFORMULA({"
-        "{\"collected_date\",\"collected_at\",\"brand\",\"platform\",\"product_name\",\"product_url\",\"review_id\",\"review_date\",\"rating\",\"author\",\"title\",\"body\",\"body_hash\",\"dedup_key\",\"source_url\",\"review_date_norm\",\"rating_num\",\"body_len\"};"
-        "IF(시트1!A3:A=\"\",,"
-        "{"
-        "시트1!A3:O,"
-        "IFERROR(DATEVALUE(REGEXREPLACE(시트1!H3:H,\"\\.\",\"-\")),시트1!A3:A),"
-        "IFERROR(VALUE(시트1!I3:I),),"
-        "LEN(시트1!L3:L)"
-        "}"
+        "=ARRAYFORMULA("
+        "IF(main_review!A3:A=\"\";;"
+        "HSTACK("
+        "main_review!A3:O;"
+        "IFERROR(TEXT(DATEVALUE(SUBSTITUTE(LEFT(main_review!H3:H;10);\".\";\"-\"));\"yyyy-mm-dd\");\"\");"
+        "IFERROR(VALUE(main_review!I3:I);\"\");"
+        "LEN(main_review!L3:L)"
         ")"
-        "})"
+        ")"
+        ")"
     )
 
-    client.update("looker_reviews!A1", [[formula]])
+    # Headers can be written as RAW.
+    client.update("looker_reviews!A1:R1", headers)
+
+    # Formula must be USER_ENTERED (not RAW), otherwise it becomes plain text.
+    import subprocess
+    subprocess.check_call([
+        "gog",
+        "sheets",
+        "update",
+        sheet_id,
+        "looker_reviews!A2",
+        "--values-json",
+        json.dumps([[formula]], ensure_ascii=False),
+        "--input",
+        "USER_ENTERED",
+        "--no-input",
+        "--account",
+        account,
+    ])
 
 
 if __name__ == "__main__":

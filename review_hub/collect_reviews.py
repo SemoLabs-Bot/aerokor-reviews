@@ -210,7 +210,7 @@ def main(max_products: int = 200):
     if rows:
         # Avoid Sheets 'append' heuristics: compute next row and write A..O explicitly.
         client.append_fixed(
-            tab=sink.get("tab") or "시트1",
+            tab=sink.get("tab") or "main_review",
             start_row=3,
             start_col="A",
             end_col="O",

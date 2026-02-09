@@ -19,6 +19,14 @@ logs/**
 !logs/jira-voice/transcripts/
 !logs/jira-voice/transcripts/.gitkeep
 
+# Build/export artifacts
+out/**
+outputs/**
+meta_*.xlsx
+*.xlsx
+
+data/reviews.json
+
 # State / caches
 state/**
 .clawhub/**

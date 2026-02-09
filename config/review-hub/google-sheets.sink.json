@@ -3,8 +3,8 @@
   "timezone": "Asia/Seoul",
   "account": "semolabsbot@gmail.com",
   "sheetId": "1hIRtmAw1k8ajicstoi2eI5Vp0pc6xSJE8HOL7ZlyVTU",
-  "tab": "시트1",
-  "appendRange": "시트1!A3:O",
+  "tab": "main_review",
+  "appendRange": "main_review!A3:O",
   "mode": "append",
   "reviewLookbackDays": 0,
   "dedup": {

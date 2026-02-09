@@ -23,6 +23,7 @@ class SinkConfig:
     account: str
     sheet_id: str
     append_range: str
+    tab: str
 
 
 def load_yaml(path: str) -> dict:
@@ -33,7 +34,12 @@ def load_yaml(path: str) -> dict:
 def load_sink_config(path: str) -> SinkConfig:
     with open(path, "r", encoding="utf-8") as f:
         d = json.load(f)
-    return SinkConfig(account=d["account"], sheet_id=d["sheetId"], append_range=d["appendRange"])
+    return SinkConfig(
+        account=d["account"],
+        sheet_id=d["sheetId"],
+        append_range=d["appendRange"],
+        tab=(d.get("tab") or "main_review"),
+    )
 
 
 def utc_now_iso() -> str:
@@ -139,7 +145,7 @@ def main():
     if new_rows:
         try:
             client.append_fixed(
-                tab="시트1",
+                tab=sink.tab,
                 start_row=3,
                 start_col="P",
                 end_col="T",
@@ -165,7 +171,7 @@ def main():
     # Columns: run_id, started_at, ended_at, status, counts_json, errors_json
     try:
         client.append_fixed(
-            tab="시트1",
+            tab=sink.tab,
             start_row=3,
             start_col="U",
             end_col="Z",

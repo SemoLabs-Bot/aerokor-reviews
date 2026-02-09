@@ -1,0 +1,145 @@
+:root{
+  --bg:#0b1020;
+  --panel:#121a33;
+  --panel2:#0f1730;
+  --text:#e7ecff;
+  --muted:#9aa6d1;
+  --accent:#5cc8ff;
+  --accent2:#8b5cf6;
+  --border:rgba(255,255,255,.08);
+}
+
+*{box-sizing:border-box}
+body{
+  margin:0;
+  font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+  background: radial-gradient(1200px 600px at 20% 0%, rgba(92,200,255,.20), transparent 60%),
+              radial-gradient(900px 600px at 80% 0%, rgba(139,92,246,.18), transparent 55%),
+              var(--bg);
+  color:var(--text);
+}
+
+.topbar{
+  display:flex;
+  gap:16px;
+  justify-content:space-between;
+  align-items:flex-start;
+  padding:18px 18px 10px;
+  border-bottom:1px solid var(--border);
+  position:sticky;
+  top:0;
+  backdrop-filter: blur(10px);
+  background: linear-gradient(to bottom, rgba(11,16,32,.88), rgba(11,16,32,.65));
+  z-index:5;
+}
+
+.title .h1{font-size:20px; font-weight:800; letter-spacing:.2px}
+.title .sub{font-size:12px; color:var(--muted); margin-top:4px}
+
+.stats{display:flex; gap:10px; flex-wrap:wrap; justify-content:flex-end}
+.stat{
+  min-width:140px;
+  background:rgba(18,26,51,.75);
+  border:1px solid var(--border);
+  border-radius:12px;
+  padding:10px 12px;
+}
+.stat .k{font-size:11px;color:var(--muted)}
+.stat .v{font-size:16px;font-weight:800;margin-top:6px}
+
+.layout{
+  display:grid;
+  grid-template-columns: 320px 1fr;
+  gap:14px;
+  padding:14px 14px 18px;
+}
+
+.sidebar{
+  display:flex;
+  flex-direction:column;
+  gap:12px;
+}
+
+.panel{
+  background:rgba(18,26,51,.72);
+  border:1px solid var(--border);
+  border-radius:14px;
+  padding:12px;
+}
+.panel-title{font-size:13px; font-weight:800; margin-bottom:10px}
+
+.field{display:flex;flex-direction:column;gap:6px;margin-bottom:10px}
+.field > span{font-size:11px;color:var(--muted)}
+.field input,.field select{
+  background:rgba(15,23,48,.85);
+  border:1px solid var(--border);
+  color:var(--text);
+  border-radius:10px;
+  padding:10px 10px;
+  outline:none;
+}
+.field input:focus,.field select:focus{border-color:rgba(92,200,255,.55)}
+
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+
+.actions{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:6px}
+button{
+  padding:10px 10px;
+  border-radius:10px;
+  border:1px solid var(--border);
+  background:rgba(15,23,48,.85);
+  color:var(--text);
+  cursor:pointer;
+}
+button.primary{background:linear-gradient(135deg, rgba(92,200,255,.9), rgba(139,92,246,.9)); border:none; font-weight:800}
+button:hover{filter:brightness(1.05)}
+
+.hint{font-size:11px;color:var(--muted);margin-top:10px;line-height:1.4}
+
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{
+  padding:8px 10px;
+  border-radius:999px;
+  border:1px solid var(--border);
+  background:rgba(15,23,48,.7);
+  font-size:12px;
+  cursor:pointer;
+}
+.chip:hover{border-color:rgba(92,200,255,.55)}
+
+.content{
+  background:rgba(18,26,51,.55);
+  border:1px solid var(--border);
+  border-radius:14px;
+  padding:12px;
+  min-height: calc(100vh - 110px);
+}
+.table-header{display:flex;justify-content:space-between;gap:10px;align-items:flex-end;margin-bottom:10px}
+.table-title{font-size:14px;font-weight:900}
+.table-sub{font-size:11px;color:var(--muted)}
+
+/* Tabulator theming */
+.tabulator{
+  border:1px solid var(--border);
+  border-radius:12px;
+  overflow:hidden;
+  background:rgba(15,23,48,.65);
+}
+.tabulator .tabulator-header{background:rgba(15,23,48,.9);border-bottom:1px solid var(--border)}
+.tabulator .tabulator-col{background:transparent;color:var(--muted);border-right:1px solid var(--border)}
+.tabulator .tabulator-row{background:transparent;color:var(--text);border-bottom:1px solid var(--border)}
+.tabulator .tabulator-row:hover{background:rgba(92,200,255,.08)}
+.tabulator .tabulator-footer{background:rgba(15,23,48,.9);border-top:1px solid var(--border)}
+
+.review-body{
+  padding:10px 12px;
+  line-height:1.55;
+  color:rgba(231,236,255,.92);
+  background:rgba(11,16,32,.55);
+  border-top:1px dashed rgba(255,255,255,.12);
+}
+.review-meta{font-size:11px;color:var(--muted);margin-bottom:6px}
+
+@media (max-width: 1100px){
+  .layout{grid-template-columns:1fr}
+}

@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Review Hub Dashboard</title>
+  <link rel="stylesheet" href="https://unpkg.com/tabulator-tables@6.2.5/dist/css/tabulator.min.css">
+  <link rel="stylesheet" href="./style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="title">
+      <div class="h1">Review Hub</div>
+      <div class="sub">제품별 리뷰 현황 대시보드 (Sheet: <span id="sheetId"></span>)</div>
+    </div>
+    <div class="stats">
+      <div class="stat"><div class="k">총 리뷰</div><div class="v" id="statCount">-</div></div>
+      <div class="stat"><div class="k">평균 평점</div><div class="v" id="statAvgRating">-</div></div>
+      <div class="stat"><div class="k">마지막 업데이트</div><div class="v" id="statUpdated">-</div></div>
+    </div>
+  </header>
+
+  <main class="layout">
+    <aside class="sidebar">
+      <div class="panel">
+        <div class="panel-title">필터</div>
+
+        <label class="field">
+          <span>키워드</span>
+          <input id="q" type="text" placeholder="본문/상품명/제목 검색" />
+        </label>
+
+        <div class="grid2">
+          <label class="field">
+            <span>브랜드</span>
+            <select id="brand"></select>
+          </label>
+          <label class="field">
+            <span>플랫폼</span>
+            <select id="platform"></select>
+          </label>
+        </div>
+
+        <label class="field">
+          <span>상품</span>
+          <select id="product"></select>
+        </label>
+
+        <div class="grid2">
+          <label class="field">
+            <span>시작일</span>
+            <input id="from" type="date" />
+          </label>
+          <label class="field">
+            <span>종료일</span>
+            <input id="to" type="date" />
+          </label>
+        </div>
+
+        <div class="grid2">
+          <label class="field">
+            <span>최소 평점</span>
+            <select id="minRating">
+              <option value="">(전체)</option>
+              <option value="1">1+</option>
+              <option value="2">2+</option>
+              <option value="3">3+</option>
+              <option value="4">4+</option>
+              <option value="5">5</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>정렬</span>
+            <select id="sort">
+              <option value="review_date_desc">리뷰작성일 ↓</option>
+              <option value="review_date_asc">리뷰작성일 ↑</option>
+              <option value="collected_at_desc">수집시각 ↓</option>
+            </select>
+          </label>
+        </div>
+
+        <div class="actions">
+          <button id="apply" class="primary">적용</button>
+          <button id="clear">초기화</button>
+        </div>
+
+        <div class="hint">
+          팁: 테이블 행을 클릭하면 리뷰 본문을 펼쳐서 볼 수 있어요.
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-title">빠른 보기</div>
+        <div id="chips" class="chips"></div>
+      </div>
+    </aside>
+
+    <section class="content">
+      <div class="table-header">
+        <div class="table-title">리뷰 리스트</div>
+        <div class="table-sub" id="tableSub">-</div>
+      </div>
+      <div id="table"></div>
+    </section>
+  </main>
+
+  <script src="https://unpkg.com/tabulator-tables@6.2.5/dist/js/tabulator.min.js"></script>
+  <script src="./app.js"></script>
+</body>
+</html>
