@@ -105,8 +105,15 @@ button:hover{filter:brightness(1.05)}
 
 .hint{font-size:11px;color:var(--muted);margin-top:10px;line-height:1.4}
 
-.chips{display:flex;flex-wrap:nowrap;gap:8px;overflow-x:auto;padding-bottom:4px}
-.chips::-webkit-scrollbar{height:8px}
+.chips{
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+  max-height: 340px;
+  overflow-y:auto;
+  padding-right:4px;
+}
+.chips::-webkit-scrollbar{width:8px}
 .chips::-webkit-scrollbar-thumb{background:rgba(15,23,42,.18);border-radius:999px}
 .chip{
   padding:8px 10px;
