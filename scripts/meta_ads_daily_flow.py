@@ -317,7 +317,15 @@ def cleanup_fixed() -> None:
 
 
 def main() -> int:
+    # Default expected date: yesterday(KST). Can be overridden for cron batch runs.
     expected = kst_yesterday()
+    if "--date" in sys.argv:
+        i = sys.argv.index("--date")
+        try:
+            expected = sys.argv[i + 1]
+        except Exception:
+            raise FlowStop("--date YYYY-MM-DD 형식으로 입력 필요")
+
     (OUT_DIR / "meta_url.txt").write_text(META_URL, encoding="utf-8")
     (OUT_DIR / "expected_date.txt").write_text(expected, encoding="utf-8")
 
