@@ -18,6 +18,10 @@ import json
 import os
 from typing import Dict, List, Tuple
 
+# Ensure workspace root is on sys.path so `import review_hub` works when invoked as a script.
+import sys
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
+
 from review_hub.sheets_client import GogSheetsClient
 
 

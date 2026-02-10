@@ -184,6 +184,13 @@ function buildChips() {
   }
 }
 
+function mergedBody(r) {
+  const t = String(r.title ?? "").trim();
+  const b = String(r.body ?? "").trim();
+  if (t && b) return `${t}\n\n${b}`;
+  return t || b;
+}
+
 function initTable() {
   table = new Tabulator("#table", {
     height: "calc(100vh - 210px)",
@@ -204,12 +211,12 @@ function initTable() {
       { title: "평점", field: "rating_num", width: 80, hozAlign: "right" },
       { title: "길이", field: "body_len", width: 80, hozAlign: "right" },
       { title: "작성자", field: "author", width: 110 },
-      { title: "제목", field: "title", minWidth: 160 },
-      { title: "본문", field: "body", minWidth: 260, formatter: (cell) => {
-          const v = String(cell.getValue() ?? "");
-          const s = v.replace(/\s+/g, " ").trim();
+      { title: "본문", field: "body", minWidth: 320, formatter: (cell) => {
+          const r = cell.getRow().getData();
+          const v = mergedBody(r);
+          const s = String(v ?? "").replace(/\s+/g, " ").trim();
           if (!s) return "";
-          const cut = s.length > 80 ? (s.slice(0, 80) + "…") : s;
+          const cut = s.length > 110 ? (s.slice(0, 110) + "…") : s;
           return `<span class="body-snippet">${escapeHtml(cut)}</span>`;
         }
       },
@@ -234,15 +241,10 @@ function initTable() {
       const meta = document.createElement("div");
       meta.className = "review-meta";
       meta.textContent = `platform=${data.platform || ""} · product_url=${data.product_url ? "(있음)" : ""} · review_id=${data.review_id || ""}`;
-      const ttl = document.createElement("div");
-      ttl.style.fontWeight = "600";
-      ttl.textContent = data.title ? `제목: ${data.title}` : "";
-
       const txt = document.createElement("div");
-      txt.textContent = data.body || "";
+      txt.textContent = mergedBody(data);
 
       body.appendChild(meta);
-      if (ttl.textContent) body.appendChild(ttl);
       body.appendChild(txt);
       el.appendChild(body);
     },
@@ -262,6 +264,27 @@ function initTable() {
   window.__tabulator = table;
 }
 
+function initSidebarToggle() {
+  const btn = document.getElementById("toggleSidebar");
+  if (!btn) return;
+
+  const key = "reviewHub.sidebarCollapsed";
+  const apply = (collapsed) => {
+    document.body.classList.toggle("sidebar-collapsed", !!collapsed);
+    btn.textContent = collapsed ? "필터/빠른보기 열기" : "필터/빠른보기 닫기";
+    try { if (table) table.redraw(true); } catch (e) {}
+  };
+
+  const stored = localStorage.getItem(key);
+  apply(stored === "1");
+
+  btn.onclick = () => {
+    const next = !document.body.classList.contains("sidebar-collapsed");
+    localStorage.setItem(key, next ? "1" : "0");
+    apply(next);
+  };
+}
+
 async function main() {
   const res = await fetch(DATA_URL, { cache: "no-store" });
   const payload = await res.json();
@@ -279,6 +302,7 @@ async function main() {
   setOptions(document.getElementById("product"), products);
 
   initTable();
+  initSidebarToggle();
   buildChips();
   // Initial render will happen after Tabulator emits tableBuilt.
   applyFilters();
