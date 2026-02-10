@@ -170,25 +170,31 @@ def main() -> None:
 
     client = GogSheetsClient(account=account, spreadsheet_id=sheet_id)
 
-    # Append in chunks using fixed append to avoid table heuristic.
+    # Append in chunks, but compute next row ONCE to avoid re-scanning A column per chunk.
     start_row = 3
     start_col = "A"
     end_col = "O"
 
+    # Find next row by scanning sentinel column once.
+    colA = client.get(f"{args.tab}!A{start_row}:A90000")
+    last = start_row - 1
+    import re
+    pat = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+    for i, row in enumerate(colA, start=start_row):
+        v = (row[0] if row else "")
+        if isinstance(v, str) and pat.search(v.strip()):
+            last = i
+    next_row = last + 1
+
     written_ranges: list[str] = []
     for i in range(0, len(out_rows), args.chunk):
         chunk = out_rows[i : i + args.chunk]
-        rng = client.append_fixed(
-            tab=args.tab,
-            start_row=start_row,
-            start_col=start_col,
-            end_col=end_col,
-            values_2d=chunk,
-            sentinel_col="A",
-            sentinel_regex=r"^\d{4}-\d{2}-\d{2}$",
-            scan_max_rows=10000,
-        )
+        s = next_row
+        e = s + len(chunk) - 1
+        rng = f"{args.tab}!{start_col}{s}:{end_col}{e}"
+        client.update(rng, chunk)
         written_ranges.append(rng)
+        next_row = e + 1
 
     print(
         json.dumps(
