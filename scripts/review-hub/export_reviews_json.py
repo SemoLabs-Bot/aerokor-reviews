@@ -65,26 +65,64 @@ def main() -> None:
     account = sink["account"]
     sheet_id = sink["sheetId"]
 
-    # Pull a sufficiently large range; Sheets will return only the populated values.
-    values = gog_get_values(account=account, sheet_id=sheet_id, a1_range="looker_reviews!A1:R5000")
-    if not values:
-        raise SystemExit("No data returned from looker_reviews")
+    # Pull looker_reviews in pages to avoid the old hard cap (R5000).
+    # Sheets will return only populated values within the requested range.
+    # Prefer large pages to reduce Google API read quota usage.
+    chunk = int(os.environ.get("REVIEW_HUB_EXPORT_CHUNK") or "20000")
+    chunk = max(1000, min(chunk, 20000))
+    max_rows = int(os.environ.get("REVIEW_HUB_EXPORT_MAX_ROWS") or "200000")
 
-    headers = values[0]
-    rows = values[1:]
-
+    headers: list[str] | None = None
     out_rows: list[dict[str, Any]] = []
-    for r in rows:
-        obj: dict[str, Any] = {}
-        for i, h in enumerate(headers):
-            obj[h] = (r[i] if i < len(r) else "")
 
-        # light typing
-        obj["rating_num"] = to_float(obj.get("rating_num"))
-        obj["body_len"] = to_int(obj.get("body_len"))
+    start_row = 1
+    while start_row <= max_rows:
+        end_row = min(max_rows, start_row + chunk - 1)
+        a1 = f"looker_reviews!A{start_row}:R{end_row}"
+        values = gog_get_values(account=account, sheet_id=sheet_id, a1_range=a1)
 
-        # Keep strings as-is; report UI will parse/format.
-        out_rows.append(obj)
+        if not values:
+            break
+
+        # First page includes the header row.
+        if start_row == 1:
+            headers = [str(h or "") for h in (values[0] or [])]
+            data_rows = values[1:]
+        else:
+            if headers is None:
+                raise SystemExit("Internal error: headers missing")
+            data_rows = values
+
+        # If the page returns no data rows, we're done.
+        if not data_rows:
+            break
+
+        for r in data_rows:
+            # Skip completely empty rows (can appear from formulas).
+            if not any(str(x or "").strip() for x in r):
+                continue
+
+            obj: dict[str, Any] = {}
+            for i, h in enumerate(headers):
+                obj[h] = (r[i] if i < len(r) else "")
+
+            # light typing
+            obj["rating_num"] = to_float(obj.get("rating_num"))
+            obj["body_len"] = to_int(obj.get("body_len"))
+
+            out_rows.append(obj)
+
+        # If we got fewer than chunk rows, we likely reached the end.
+        # (For the first page, values includes the header row.)
+        got = len(values)
+        effective_got = got - 1 if start_row == 1 else got
+        if effective_got < chunk:
+            break
+
+        start_row += chunk
+
+    if headers is None:
+        raise SystemExit("No data returned from looker_reviews")
 
     generated_at = datetime.now().astimezone().isoformat()
     payload = {

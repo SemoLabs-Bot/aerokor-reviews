@@ -78,6 +78,16 @@ body.sidebar-collapsed .sidebar{display:none}
   overflow: auto;
   padding-right: 4px;
 }
+
+.sidebar-actions{
+  margin-top: 4px;
+  padding-bottom: 8px;
+  display:flex;
+}
+
+.sidebar-toggle{
+  width: 100%;
+}
 .sidebar::-webkit-scrollbar{width:10px}
 .sidebar::-webkit-scrollbar-thumb{background:rgba(15,23,42,.12);border-radius:999px}
 
