@@ -42,6 +42,9 @@ body{
 button.ghost{padding:8px 10px; border-radius:10px; border:1px solid var(--border); background:rgba(255,255,255,.75); font-weight:800}
 button.ghost:hover{filter:brightness(1.03)}
 
+.ghost-link{display:inline-block; padding:8px 10px; border-radius:10px; border:1px solid var(--border); background:rgba(255,255,255,.75); font-weight:900; color:var(--text); text-decoration:none; margin-right:8px}
+.ghost-link:hover{filter:brightness(1.03)}
+
 .stats{display:flex; gap:10px; flex-wrap:wrap; justify-content:flex-end}
 .stat{
   min-width:140px;
