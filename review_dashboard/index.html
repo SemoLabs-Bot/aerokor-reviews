@@ -60,7 +60,7 @@
 
         <div class="grid2">
           <label class="field">
-            <span>최소 평점</span>
+            <span>평점(최소)</span>
             <select id="minRating">
               <option value="">(전체)</option>
               <option value="1">1+</option>
@@ -71,14 +71,26 @@
             </select>
           </label>
           <label class="field">
-            <span>정렬</span>
-            <select id="sort">
-              <option value="review_date_desc">리뷰작성일 ↓</option>
-              <option value="review_date_asc">리뷰작성일 ↑</option>
-              <option value="collected_at_desc">수집시각 ↓</option>
+            <span>평점(최대)</span>
+            <select id="maxRating">
+              <option value="">(전체)</option>
+              <option value="1">~1</option>
+              <option value="2">~2</option>
+              <option value="3">~3</option>
+              <option value="4">~4</option>
+              <option value="5">~5</option>
             </select>
           </label>
         </div>
+
+        <label class="field">
+          <span>정렬</span>
+          <select id="sort">
+            <option value="review_date_desc">리뷰작성일 ↓</option>
+            <option value="review_date_asc">리뷰작성일 ↑</option>
+            <option value="collected_at_desc">수집시각 ↓</option>
+          </select>
+        </label>
 
         <div class="actions">
           <button id="clear">초기화</button>

@@ -86,6 +86,7 @@ function applyFilters() {
   const from = parseDateOnly(document.getElementById("from").value);
   const to = parseDateOnly(document.getElementById("to").value);
   const minRating = Number(document.getElementById("minRating").value || 0);
+  const maxRating = Number(document.getElementById("maxRating").value || 0);
   const sort = document.getElementById("sort").value;
 
   const filtered = ALL.filter(r => {
@@ -97,9 +98,12 @@ function applyFilters() {
     if (from && (!d || d < from)) return false;
     if (to && (!d || d > to)) return false;
 
+    const rr = Number(r.rating_num);
     if (minRating) {
-      const rr = Number(r.rating_num);
       if (Number.isNaN(rr) || rr < minRating) return false;
+    }
+    if (maxRating) {
+      if (Number.isNaN(rr) || rr > maxRating) return false;
     }
 
     if (q) {
@@ -136,6 +140,7 @@ function applyFilters() {
   if (platform) sub.push(`platform=${platform}`);
   if (product) sub.push(`product=${product}`);
   if (from || to) sub.push(`date=${from ? document.getElementById("from").value : ""}..${to ? document.getElementById("to").value : ""}`);
+  if (minRating || maxRating) sub.push(`rating=${minRating || ""}..${maxRating || ""}`);
   if (q) sub.push(`q=${q}`);
 
   document.getElementById("tableSub").textContent = sub.length ? sub.join(" · ") : "전체";
@@ -149,6 +154,7 @@ function clearFilters() {
   document.getElementById("from").value = "";
   document.getElementById("to").value = "";
   document.getElementById("minRating").value = "";
+  document.getElementById("maxRating").value = "";
   document.getElementById("sort").value = "review_date_desc";
   applyFilters();
 }

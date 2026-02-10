@@ -22,6 +22,9 @@ PY
 
 BEFORE_COUNT="$(count_reviews)"
 
+# 0) Export exact duplicates snapshot into a separate tab (diagnostics)
+python3 scripts/review-hub/export_exact_duplicates.py >/dev/null || true
+
 # 1) Export latest reviews.json from Google Sheets looker_reviews
 python3 scripts/review-hub/export_reviews_json.py >/dev/null
 
