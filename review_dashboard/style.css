@@ -47,7 +47,7 @@ button.ghost:hover{transform:translateY(-1px)}
 /* Notifications */
 .notif{position:relative}
 .notif-btn{padding:8px 10px}
-.notif-icon{font-size:14px; line-height:1}
+.notif-icon{width:16px; height:16px; stroke-width:2.2; line-height:1}
 .notif-dot{
   position:absolute;
   top:6px;
