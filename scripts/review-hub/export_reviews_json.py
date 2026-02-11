@@ -134,20 +134,90 @@ def main() -> None:
         raise SystemExit("No data returned from looker_reviews")
 
     generated_at = datetime.now().astimezone().isoformat()
-    payload = {
+    # --- Output (optimized for dashboard load) ---
+    # We split data into:
+    # 1) reviews_index.json: lightweight rows used for filters/table/insights
+    # 2) reviews_body/chunk-XYZ.json: heavy bodies loaded lazily on row expand
+
+    body_chunk_size = int(os.environ.get("REVIEW_HUB_BODY_CHUNK_SIZE") or "2000")
+    body_chunk_size = max(200, min(body_chunk_size, 5000))
+
+    index_rows: list[dict[str, Any]] = []
+    body_chunks: dict[int, dict[str, dict[str, Any]]] = {}
+
+    for i, obj in enumerate(out_rows):
+        k = str(obj.get("dedup_key") or "")
+        chunk_id = i // body_chunk_size
+
+        # Index row: keep ONLY fields needed for filters/table/insights.
+        idx = {
+            "dedup_key": obj.get("dedup_key") or "",
+            "brand": obj.get("brand") or "",
+            "platform": obj.get("platform") or "",
+            "product_name": obj.get("product_name") or "",
+            "review_date_norm": obj.get("review_date_norm") or "",
+            "rating_num": obj.get("rating_num"),
+            "author": obj.get("author") or "",
+            "body_len": obj.get("body_len"),
+            "source_url": obj.get("source_url") or "",
+            "body_chunk": chunk_id,
+        }
+        index_rows.append(idx)
+
+        # Body chunk: store only what we need on expand.
+        if k:
+            bc = body_chunks.setdefault(chunk_id, {})
+            bc[k] = {
+                "title": obj.get("title") or "",
+                "body": obj.get("body") or "",
+            }
+
+    out_dir = os.path.join(WORKSPACE_ROOT, "data")
+    os.makedirs(out_dir, exist_ok=True)
+
+    # Backward compatibility (some older deployments may still point here)
+    legacy_path = os.path.join(out_dir, "reviews.json")
+    legacy_payload = {
         "generated_at": generated_at,
         "sheet_id": sheet_id,
         "count": len(out_rows),
         "rows": out_rows,
     }
+    with open(legacy_path, "w", encoding="utf-8") as f:
+        json.dump(legacy_payload, f, ensure_ascii=False)
 
-    out_dir = os.path.join(WORKSPACE_ROOT, "data")
-    os.makedirs(out_dir, exist_ok=True)
-    out_path = os.path.join(out_dir, "reviews.json")
-    with open(out_path, "w", encoding="utf-8") as f:
-        json.dump(payload, f, ensure_ascii=False)
+    index_payload = {
+        "generated_at": generated_at,
+        "sheet_id": sheet_id,
+        "count": len(index_rows),
+        "rows": index_rows,
+        "body_chunk_size": body_chunk_size,
+        "body_dir": "reviews_body",
+        "body_file_prefix": "chunk-",
+    }
 
-    print(out_path)
+    index_path = os.path.join(out_dir, "reviews_index.json")
+    with open(index_path, "w", encoding="utf-8") as f:
+        json.dump(index_payload, f, ensure_ascii=False)
+
+    body_dir = os.path.join(out_dir, "reviews_body")
+    os.makedirs(body_dir, exist_ok=True)
+
+    for chunk_id, by_key in body_chunks.items():
+        p = os.path.join(body_dir, f"chunk-{chunk_id:03d}.json")
+        with open(p, "w", encoding="utf-8") as f:
+            json.dump(
+                {
+                    "generated_at": generated_at,
+                    "sheet_id": sheet_id,
+                    "chunk": chunk_id,
+                    "by_key": by_key,
+                },
+                f,
+                ensure_ascii=False,
+            )
+
+    print(index_path)
 
 
 if __name__ == "__main__":

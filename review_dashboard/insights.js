@@ -1,4 +1,5 @@
-const DATA_URL = "../data/reviews.json";
+const DATA_URL = "../data/reviews_index.json";
+const LEGACY_URL = "../data/reviews.json";
 
 function byText(x){ return String(x ?? ""); }
 
@@ -163,8 +164,14 @@ function chartBar(el, labels, data, {label, color, horizontal=false, truncateTic
 }
 
 async function main(){
-  const res = await fetch(DATA_URL, { cache: 'no-store' });
-  const payload = await res.json();
+  let payload;
+  try {
+    const res = await fetch(DATA_URL, { cache: 'no-store' });
+    payload = await res.json();
+  } catch (e) {
+    const res2 = await fetch(LEGACY_URL, { cache: 'no-store' });
+    payload = await res2.json();
+  }
   const rows = payload.rows || [];
 
   const st = computeStats(rows);

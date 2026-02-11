@@ -1,6 +1,10 @@
 /* global Tabulator */
 
-const DATA_URL = "../data/reviews.json";
+const DATA_URL = "../data/reviews_index.json";
+const LEGACY_URL = "../data/reviews.json";
+let BODY_DIR = "../data/reviews_body";
+let BODY_FILE_PREFIX = "chunk-";
+const BODY_CACHE = new Map(); // chunkId -> by_key map
 
 let ALL = [];
 let table;
@@ -191,6 +195,31 @@ function mergedBody(r) {
   return t || b;
 }
 
+async function loadBodyForRow(r) {
+  // r should contain dedup_key + body_chunk
+  const key = String(r.dedup_key || "");
+  const chunkId = Number(r.body_chunk);
+  if (!key || !Number.isFinite(chunkId)) return r;
+
+  // If already present, nothing to do.
+  if (r.body || r.title) return r;
+
+  if (!BODY_CACHE.has(chunkId)) {
+    const url = `${BODY_DIR}/${BODY_FILE_PREFIX}${String(chunkId).padStart(3, "0")}.json`;
+    const res = await fetch(url, { cache: "no-store" });
+    const payload = await res.json();
+    BODY_CACHE.set(chunkId, payload.by_key || {});
+  }
+
+  const byKey = BODY_CACHE.get(chunkId) || {};
+  const b = byKey[key];
+  if (b) {
+    r.title = b.title || "";
+    r.body = b.body || "";
+  }
+  return r;
+}
+
 function initTable() {
   table = new Tabulator("#table", {
     height: "calc(100vh - 210px)",
@@ -213,6 +242,12 @@ function initTable() {
       { title: "작성자", field: "author", width: 110 },
       { title: "본문", field: "body", minWidth: 320, formatter: (cell) => {
           const r = cell.getRow().getData();
+          // Index payload doesn't include body/title; show placeholder until loaded.
+          if (!r.body && !r.title) {
+            const len = Number(r.body_len);
+            const hint = Number.isFinite(len) && len > 0 ? `(${len}자)` : "";
+            return `<span class="body-snippet" style="color:rgba(71,85,105,.95)">클릭해서 본문 보기 ${hint}</span>`;
+          }
           const v = mergedBody(r);
           const s = String(v ?? "").replace(/\s+/g, " ").trim();
           if (!s) return "";
@@ -228,25 +263,37 @@ function initTable() {
         }
       },
     ],
-    rowClick: function (e, row) {
+    rowClick: async function (e, row) {
       const el = row.getElement();
       const already = el.querySelector(".review-body");
       if (already) {
         already.remove();
         return;
       }
+
       const data = row.getData();
       const body = document.createElement("div");
       body.className = "review-body";
+
       const meta = document.createElement("div");
       meta.className = "review-meta";
-      meta.textContent = `platform=${data.platform || ""} · product_url=${data.product_url ? "(있음)" : ""} · review_id=${data.review_id || ""}`;
+      meta.textContent = `platform=${data.platform || ""} · source_url=${data.source_url ? "(있음)" : ""} · key=${String(data.dedup_key || "").slice(0, 8)}`;
+
       const txt = document.createElement("div");
-      txt.textContent = mergedBody(data);
+      txt.textContent = "불러오는 중…";
 
       body.appendChild(meta);
       body.appendChild(txt);
       el.appendChild(body);
+
+      try {
+        await loadBodyForRow(data);
+        txt.textContent = mergedBody(data);
+        // Refresh snippet cell now that body is loaded.
+        try { row.update(data); } catch (err) {}
+      } catch (err) {
+        txt.textContent = "본문을 불러오지 못했어요.";
+      }
     },
   });
 
@@ -289,9 +336,20 @@ function initSidebarToggle() {
 }
 
 async function main() {
-  const res = await fetch(DATA_URL, { cache: "no-store" });
-  const payload = await res.json();
+  // Prefer the optimized index payload; fall back to legacy reviews.json.
+  let payload;
+  try {
+    const res = await fetch(DATA_URL, { cache: "no-store" });
+    payload = await res.json();
+  } catch (e) {
+    const res2 = await fetch(LEGACY_URL, { cache: "no-store" });
+    payload = await res2.json();
+  }
+
   ALL = payload.rows || [];
+
+  if (payload.body_dir) BODY_DIR = `../data/${payload.body_dir}`;
+  if (payload.body_file_prefix) BODY_FILE_PREFIX = payload.body_file_prefix;
 
   document.getElementById("sheetId").textContent = payload.sheet_id || "";
   document.getElementById("statUpdated").textContent = payload.generated_at ? payload.generated_at.replace("T", " ").slice(0, 19) : "-";

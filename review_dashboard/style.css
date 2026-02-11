@@ -38,11 +38,20 @@ body{
 
 .title .h1{font-size:20px; font-weight:800; letter-spacing:.2px}
 .title .sub{font-size:12px; color:var(--muted); margin-top:4px}
-.top-actions{margin-top:10px}
+.top-actions{margin-top:10px; display:flex; align-items:center; gap:8px}
 button.ghost{padding:8px 10px; border-radius:10px; border:1px solid var(--border); background:rgba(255,255,255,.75); font-weight:900}
 button.ghost:hover{filter:brightness(1.03)}
 
-.ghost-link{display:inline-block; padding:8px 10px; border-radius:10px; border:1px solid var(--border); background:rgba(255,255,255,.75); font-weight:900; color:var(--text); text-decoration:none; margin-left:8px}
+/* Match height between the topbar toggle button and the insights link */
+.top-actions button.ghost,
+.top-actions .ghost-link{
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+}
+
+.ghost-link{display:inline-flex; padding:8px 10px; border-radius:10px; border:1px solid var(--border); background:rgba(255,255,255,.75); font-weight:900; color:var(--text); text-decoration:none}
+.ghost-link:hover{filter:brightness(1.03)}
 .ghost-link:hover{filter:brightness(1.03)}
 
 .stats{display:flex; gap:10px; flex-wrap:wrap; justify-content:flex-end}
