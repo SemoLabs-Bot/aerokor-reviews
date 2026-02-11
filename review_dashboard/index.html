@@ -15,28 +15,26 @@
       <div class="sub">제품별 리뷰 현황 대시보드 (Sheet: <span id="sheetId"></span>)</div>
       <div class="top-actions">
         <button id="toggleSidebar" class="ghost" type="button" title="좌측 메뉴(필터/빠른 보기) 열기/닫기">⟨ 좌측 메뉴 닫기</button>
-
-        <div class="notif">
-          <button id="notifBtn" class="ghost notif-btn" type="button" aria-label="알림" title="알림">
-            <span class="notif-icon">🔔</span>
-            <span id="notifDot" class="notif-dot" aria-hidden="true"></span>
-          </button>
-          <div id="notifPanel" class="notif-panel" aria-hidden="true">
-            <div class="notif-head">
-              <div class="notif-title">알림</div>
-              <div class="notif-actions">
-                <button id="notifMarkAllRead" class="mini" type="button">모두 읽음</button>
-                <button id="notifClearAll" class="mini danger" type="button">모두 삭제</button>
-              </div>
-            </div>
-            <div id="notifList" class="notif-list"></div>
-          </div>
-        </div>
-
         <a class="ghost-link" href="./insights.html">지표 | 그래프</a>
       </div>
     </div>
     <div class="stats">
+      <div class="notif stats-notif">
+        <button id="notifBtn" class="ghost notif-btn" type="button" aria-label="알림" title="알림">
+          <span class="notif-icon">🔔</span>
+          <span id="notifDot" class="notif-dot" aria-hidden="true"></span>
+        </button>
+        <div id="notifPanel" class="notif-panel" aria-hidden="true">
+          <div class="notif-head">
+            <div class="notif-title">알림</div>
+            <div class="notif-actions">
+              <button id="notifMarkAllRead" class="mini" type="button">모두 읽음</button>
+              <button id="notifClearAll" class="mini danger" type="button">모두 삭제</button>
+            </div>
+          </div>
+          <div id="notifList" class="notif-list"></div>
+        </div>
+      </div>
       <div class="stat"><div class="k">총 리뷰</div><div class="v" id="statCount">-</div></div>
       <div class="stat"><div class="k">평균 평점</div><div class="v" id="statAvgRating">-</div></div>
       <div class="stat"><div class="k">마지막 업데이트</div><div class="v" id="statUpdated">-</div></div>
