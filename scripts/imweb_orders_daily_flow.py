@@ -638,6 +638,17 @@ def main():
     try:
         raw_last_col = a1_col(len(cols) if cols else 1)
         sheets_format(args.sheet_id, args.tab_raw, f"A1:{raw_last_col}1", raw_header_fmt, header_fields, args.account)
+
+        # Ensure the 주문일 column displays as datetime even if legacy rows are stored as Excel serial numbers.
+        # (We also normalize new appends to string, but old rows can remain numeric.)
+        sheets_format(
+            args.sheet_id,
+            args.tab_raw,
+            "AK2:AK20000",
+            {"numberFormat": {"type": "DATE_TIME", "pattern": "yyyy-mm-dd hh:mm"}},
+            "numberFormat",
+            args.account,
+        )
     except Exception:
         # Formatting should never block data writes.
         pass
@@ -651,8 +662,44 @@ def main():
             row_cursor += len(chunk)
 
         # Pivot header row is always at row 3 in our template.
+        # User preference: header background should NOT cover the extra computed columns (D/E).
         try:
-            sheets_format(args.sheet_id, args.tab_pivot, "A3:E3", pivot_header_fmt, header_fields, args.account)
+            sheets_format(args.sheet_id, args.tab_pivot, "A3:C3", pivot_header_fmt, header_fields, args.account)
+            # Explicitly clear header background on computed columns area (D/E).
+            sheets_format(
+                args.sheet_id,
+                args.tab_pivot,
+                "D3:E3",
+                {"backgroundColor": {"red": 1, "green": 1, "blue": 1}},
+                "backgroundColor",
+                args.account,
+            )
+        except Exception:
+            pass
+
+        # User preference: apply background color for grand total / subtotals.
+        total_fmt = {
+            "backgroundColor": {"red": 212 / 255, "green": 221 / 255, "blue": 233 / 255},
+            "textFormat": {"bold": True},
+        }
+        total_fields = "backgroundColor,textFormat.bold"
+        try:
+            for i, row in enumerate(pivot_matrix, start=1):
+                label = normalize_str(row[0] if row else "")
+                if not label:
+                    continue
+                if label == "총합계" or "소계" in label:
+                    # User preference: total/subtotal background should NOT cover computed columns (D/E)
+                    sheets_format(args.sheet_id, args.tab_pivot, f"A{i}:C{i}", total_fmt, total_fields, args.account)
+                    # Clear background on computed columns
+                    sheets_format(
+                        args.sheet_id,
+                        args.tab_pivot,
+                        f"D{i}:E{i}",
+                        {"backgroundColor": {"red": 1, "green": 1, "blue": 1}},
+                        "backgroundColor",
+                        args.account,
+                    )
         except Exception:
             pass
 

@@ -352,6 +352,14 @@ button:hover{transform:translateY(-1px)}
   background:rgba(37,99,235,.16);
   border-color:rgba(37,99,235,.56);
 }
+.review-body{
+  padding:10px 12px;
+  line-height:1.55;
+  color:var(--text);
+  background:rgba(239,244,255,.76);
+  border-top:1px dashed rgba(0,0,0,.08);
+}
+.review-meta{font-size:11px;color:var(--muted);margin-bottom:6px}
 .body-snippet{
   color:var(--text);
 }
