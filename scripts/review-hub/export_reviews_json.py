@@ -310,6 +310,34 @@ def main() -> None:
     brand_avg.sort(key=lambda x: x[1], reverse=True)
     brand_avg = brand_avg[:15]
 
+    # Daily counters
+    try:
+        kst = dt.timezone(dt.timedelta(hours=9))
+        now_kst = dt.datetime.now(tz=kst)
+        yesterday = (now_kst - dt.timedelta(days=1)).date().isoformat()
+        today = now_kst.date().isoformat()
+    except Exception:
+        yesterday = ""
+        today = ""
+
+    yesterday_review_count = 0
+    collected_today_count = 0
+    rating_sum = 0.0
+    rating_cnt = 0
+    for r in out_rows:
+        if yesterday and str(r.get("review_date_norm") or "") == yesterday:
+            yesterday_review_count += 1
+        if today and str(r.get("collected_date") or "") == today:
+            collected_today_count += 1
+        try:
+            x = float(r.get("rating_num"))
+            if x > 0:
+                rating_sum += x
+                rating_cnt += 1
+        except Exception:
+            pass
+    avg_rating = (rating_sum / rating_cnt) if rating_cnt else None
+
     insights_path = os.path.join(out_dir, "insights.json")
     with open(insights_path, "w", encoding="utf-8") as f:
         json.dump(
@@ -317,6 +345,11 @@ def main() -> None:
                 "generated_at": generated_at,
                 "sheet_id": sheet_id,
                 "count": len(out_rows),
+                "avg_rating": round(avg_rating, 4) if avg_rating is not None else None,
+                "yesterday": yesterday,
+                "yesterday_review_count": yesterday_review_count,
+                "today": today,
+                "collected_today_count": collected_today_count,
                 "top_products": [{"name": n, "count": c} for n, c in top_prods],
                 "brand_avg": [{"name": n, "avg": round(a, 4), "count": c} for n, a, c in brand_avg],
                 "rating_dist": rating_dist,

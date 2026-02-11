@@ -28,10 +28,25 @@ DEDUPE_JSON=""
 EXPORT_OK=false
 PUSH_RESULT=""
 
+# For reporting
+YESTERDAY_COUNT=""
+NEW_COLLECTED_THIS_RUN=0
+DASHBOARD_APPLIED=""
+
 # 1) Discovery + (imweb) review collection
 DISCOVERY_JSON=$(python3 -m review_hub.run_daily 2>/dev/null || true)
 IMWEB_JSON=$(python3 -m review_hub.collect_reviews --max-products "${REVIEW_HUB_MAX_PRODUCTS:-200}" 2>/dev/null || true)
-
+# best-effort parse new collected count from imweb collector output
+NEW_COLLECTED_THIS_RUN=$(printf "%s" "$IMWEB_JSON" | python3 - <<'PY'
+import json, sys
+s=sys.stdin.read().strip()
+try:
+  j=json.loads(s)
+  print(int(j.get('reviews_appended') or 0))
+except Exception:
+  print(0)
+PY
+)
 # 2) Browser-based collectors (ohou/coupang/naver/smartstore/wadiz)
 # Keep this bounded so cron doesn't overlap forever.
 if python3 -m review_hub.run_browser_queue --max-minutes "${REVIEW_HUB_BROWSER_MAX_MINUTES:-55}" --sleep "${REVIEW_HUB_BROWSER_SLEEP_S:-2}" >/dev/null 2>&1; then
@@ -52,6 +67,18 @@ PYTHONPATH=. python3 review_hub/setup_looker_views.py >/dev/null
 python3 scripts/review-hub/export_reviews_json.py >/dev/null
 EXPORT_OK=true
 
+# Read yesterday count from generated insights.json (fast)
+YESTERDAY_COUNT=$(python3 - <<'PY'
+import json
+p='data/insights.json'
+try:
+  j=json.load(open(p,'r',encoding='utf-8'))
+  print(j.get('yesterday_review_count') or 0)
+except Exception:
+  print(0)
+PY
+)
+
 # 6) Publish if changed
 if git diff --quiet -- data; then
   PUSH_RESULT="no_change"
@@ -62,6 +89,9 @@ else
   git push >/dev/null
   PUSH_RESULT="pushed"
 fi
+
+# Dashboard applied = pushed OR no_change (already up-to-date)
+DASHBOARD_APPLIED="true"
 
 python3 - <<PY
 import json, os
@@ -88,6 +118,9 @@ out={
     'dedupe_ran': True,
     'export_ok': True,
     'push_result': push_result,
+    'yesterday_review_count': int(${json.dumps(YESTERDAY_COUNT)}),
+    'new_collected_this_run': int(${json.dumps(NEW_COLLECTED_THIS_RUN)}),
+    'dashboard_applied': True,
   },
   'discovery': jload(discovery_raw),
   'imweb': jload(imweb_raw),

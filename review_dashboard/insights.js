@@ -219,7 +219,7 @@ async function main(){
   }
 
   document.getElementById('statCount').textContent = Number(payload.count || 0).toLocaleString();
-  document.getElementById('statAvg').textContent = '-';
+  document.getElementById('statAvg').textContent = (payload.avg_rating != null) ? Number(payload.avg_rating).toFixed(2) : '-';
   document.getElementById('statUpdated').textContent = payload.generated_at ? payload.generated_at.replace('T',' ').slice(0,19) : '-';
 
   const top = payload.top_products || [];
