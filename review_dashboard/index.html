@@ -27,7 +27,7 @@
 
   <main class="layout" id="layout">
     <aside class="sidebar" id="sidebar">
-      <div class="panel">
+      <div class="panel filter-panel">
         <div class="panel-title">필터</div>
 
         <label class="field">
@@ -102,11 +102,11 @@
         </div>
 
         <div class="hint">
-          팁: 테이블 행을 클릭하면 리뷰 본문을 펼쳐서 볼 수 있어요.
+          팁: 테이블 행을 클릭하면 리뷰 본문을 모달로 볼 수 있어요.
         </div>
       </div>
 
-      <div class="panel">
+      <div class="panel quick-view-panel">
         <div class="panel-title">빠른 보기</div>
         <div id="chips" class="chips"></div>
       </div>
@@ -121,6 +121,17 @@
       <div id="table"></div>
     </section>
   </main>
+
+
+  <div id="reviewModal" class="review-modal" aria-hidden="true">
+    <div class="review-modal-backdrop" data-close="1"></div>
+    <div class="review-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="reviewModalTitle">
+      <button id="reviewModalClose" class="review-modal-close" type="button" aria-label="닫기">✕</button>
+      <div id="reviewModalTitle" class="review-modal-title">리뷰 상세</div>
+      <div id="reviewModalMeta" class="review-modal-meta"></div>
+      <pre id="reviewModalBody" class="review-modal-body">-</pre>
+    </div>
+  </div>
 
   <script src="https://unpkg.com/tabulator-tables@6.2.5/dist/js/tabulator.min.js"></script>
   <script src="./app.js"></script>

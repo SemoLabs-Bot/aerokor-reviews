@@ -22,6 +22,58 @@ let table;
 let TABLE_BUILT = false;
 let PENDING_DATA = null;
 
+let reviewModalEl = null;
+let reviewModalBodyEl = null;
+let reviewModalMetaEl = null;
+let reviewModalRequestToken = 0;
+
+function closeReviewModal() {
+  reviewModalRequestToken += 1;
+  if (!reviewModalEl) return;
+  reviewModalEl.classList.remove("open");
+  reviewModalEl.setAttribute("aria-hidden", "true");
+  document.body.style.overflow = "";
+}
+
+function openReviewModal(data, bodyText) {
+  if (!reviewModalEl) return;
+  const product = String(data.product_name || "(상품 미상)");
+  const author = String(data.author || "작성자 미상");
+  const rating = Number(data.rating_num);
+  const ratingText = Number.isFinite(rating) && rating > 0 ? `${rating}점` : "평점 없음";
+  const reviewDate = String(data.review_date_norm || data.review_date || "-");
+
+  const titleEl = document.getElementById("reviewModalTitle");
+  if (titleEl) titleEl.textContent = product;
+  if (reviewModalMetaEl) reviewModalMetaEl.textContent = `작성자: ${author} · 평점: ${ratingText} · 리뷰일: ${reviewDate}`;
+  if (reviewModalBodyEl) reviewModalBodyEl.textContent = bodyText || "(리뷰 본문이 비어있어요.)";
+
+  reviewModalEl.classList.add("open");
+  reviewModalEl.setAttribute("aria-hidden", "false");
+  document.body.style.overflow = "hidden";
+}
+
+function initReviewModal() {
+  reviewModalEl = document.getElementById("reviewModal");
+  reviewModalBodyEl = document.getElementById("reviewModalBody");
+  reviewModalMetaEl = document.getElementById("reviewModalMeta");
+  if (!reviewModalEl) return;
+
+  const closeBtn = document.getElementById("reviewModalClose");
+  if (closeBtn) closeBtn.onclick = closeReviewModal;
+
+  reviewModalEl.addEventListener("click", (ev) => {
+    const target = ev.target;
+    if (!(target instanceof HTMLElement)) return;
+    if (target.dataset.close === "1") closeReviewModal();
+  });
+
+  document.addEventListener("keydown", (ev) => {
+    if (ev.key === "Escape" && reviewModalEl.classList.contains("open")) closeReviewModal();
+  });
+}
+
+
 function uniq(arr) {
   return Array.from(new Set(arr.filter(Boolean)));
 }
@@ -305,35 +357,22 @@ function initTable() {
       },
     ],
     rowClick: async function (e, row) {
-      const el = row.getElement();
-      const already = el.querySelector(".review-body");
-      if (already) {
-        already.remove();
-        return;
-      }
+      const target = e && e.target;
+      if (target instanceof HTMLElement && target.closest("a")) return;
 
       const data = row.getData();
-      const body = document.createElement("div");
-      body.className = "review-body";
-
-      const meta = document.createElement("div");
-      meta.className = "review-meta";
-      meta.textContent = `platform=${data.platform || ""} · source_url=${data.source_url ? "(있음)" : ""} · key=${String(data.dedup_key || "").slice(0, 8)}`;
-
-      const txt = document.createElement("div");
-      txt.textContent = "불러오는 중…";
-
-      body.appendChild(meta);
-      body.appendChild(txt);
-      el.appendChild(body);
+      const requestToken = ++reviewModalRequestToken;
+      openReviewModal(data, "불러오는 중…");
 
       try {
         await loadBodyForRow(data);
-        txt.textContent = mergedBody(data);
+        if (requestToken !== reviewModalRequestToken) return;
+        openReviewModal(data, mergedBody(data));
         // Refresh snippet cell now that body is loaded.
         try { row.update(data); } catch (err) {}
       } catch (err) {
-        txt.textContent = "본문을 불러오지 못했어요.";
+        if (requestToken !== reviewModalRequestToken) return;
+        openReviewModal(data, "본문을 불러오지 못했어요.");
       }
     },
   });
@@ -399,6 +438,7 @@ async function main() {
     setOptions(document.getElementById("platform"), platforms);
     setOptions(document.getElementById("product"), products);
 
+    initReviewModal();
     initTable();
     initSidebarToggle();
     buildChips();
@@ -427,6 +467,7 @@ async function main() {
   // Products list is intentionally not preloaded (can be huge). We'll build it on demand.
   setOptions(document.getElementById("product"), [], { withAll: true });
 
+  initReviewModal();
   initTable();
   initSidebarToggle();
 
