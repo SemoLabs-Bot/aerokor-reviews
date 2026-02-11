@@ -216,6 +216,18 @@ def extract_values(xlsx_path: Path, expected_date: str | None) -> ExtractResult:
 
         report_date = next(iter(dates))
         if report_date != expected_date:
+            # Meta export can be in ad-account timezone (not KST). Allow a 1-day offset and
+            # normalize dates to the expected_date for downstream append/dedup.
+            try:
+                d_expected = datetime.fromisoformat(expected_date).date()
+                d_report = datetime.fromisoformat(report_date).date()
+                if abs((d_expected - d_report).days) == 1:
+                    # Rewrite date column (row[3])
+                    for rr in rows:
+                        rr[3] = expected_date
+                    return ExtractResult(report_date=expected_date, values=rows)
+            except Exception:
+                pass
             raise FlowStop(
                 f"날짜 검증 실패: expected={expected_date} but xlsx={report_date} (UI/계정 timezone 영향 가능)."
             )
@@ -366,6 +378,9 @@ def main() -> int:
             source = Path(sys.argv[i + 1])
         except Exception:
             raise FlowStop("--source <path> 형식으로 입력 필요")
+
+    # For error reporting in the FlowStop handler
+    expected: str = expected_single or (f"{start}..{end}" if start and end else "(unknown)")
 
     src_desc = ""
     try:
