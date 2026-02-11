@@ -88,8 +88,10 @@ body.sidebar-collapsed .sidebar{display:none}
   flex-direction:column;
   gap:12px;
   min-height: 0;
-  overflow: hidden;
+  overflow-y: auto;
+  overflow-x: hidden;
   padding-right: 4px;
+  padding-bottom: 6px;
 }
 
 .sidebar-actions{
@@ -123,18 +125,16 @@ body.sidebar-collapsed .sidebar{display:none}
 }
 .panel-title{font-size:13px; font-weight:900; margin-bottom:12px}
 
-.filter-panel{
+.filter-panel,
+.quick-view-panel{
   flex:0 0 auto;
-  max-height:58%;
-  overflow-y:auto;
+  overflow:visible;
 }
 
 .quick-view-panel{
-  flex:1 1 auto;
   display:flex;
   flex-direction:column;
-  min-height:0;
-  overflow:hidden;
+  min-height:180px;
 }
 
 
@@ -176,14 +176,8 @@ button:hover{transform:translateY(-1px)}
   display:flex;
   flex-direction:column;
   gap:10px;
-  flex:1 1 auto;
-  min-height:0;
-  max-height:none;
-  overflow-y:auto;
-  padding-right:4px;
+  overflow:visible;
 }
-.chips::-webkit-scrollbar{width:8px}
-.chips::-webkit-scrollbar-thumb{background:rgba(15,23,42,.18);border-radius:999px}
 .chip{
   padding:8px 10px;
   border-radius:12px;
@@ -370,8 +364,11 @@ button:hover{transform:translateY(-1px)}
   inset:0;
   z-index:60;
   display:none;
+  align-items:center;
+  justify-content:center;
+  padding:24px 18px;
 }
-.review-modal.open{display:block}
+.review-modal.open{display:flex}
 .review-modal-backdrop{
   position:absolute;
   inset:0;
@@ -381,8 +378,8 @@ button:hover{transform:translateY(-1px)}
 .review-modal-dialog{
   position:relative;
   width:min(860px, calc(100vw - 36px));
-  max-height:calc(100vh - 64px);
-  margin:32px auto;
+  max-height:calc(100vh - 48px);
+  margin:0;
   background:#fff;
   border:1px solid rgba(15,23,42,.16);
   border-radius:14px;
@@ -391,6 +388,7 @@ button:hover{transform:translateY(-1px)}
   display:flex;
   flex-direction:column;
   gap:10px;
+  overflow:hidden;
 }
 .review-modal-close{
   position:absolute;
@@ -399,6 +397,9 @@ button:hover{transform:translateY(-1px)}
   width:30px;
   height:30px;
   border-radius:8px;
+  display:grid;
+  place-items:center;
+  padding:0;
   font-size:14px;
   line-height:1;
   border:1px solid rgba(15,23,42,.16);
@@ -417,13 +418,14 @@ button:hover{transform:translateY(-1px)}
 }
 .review-modal-body{
   margin:0;
+  flex:1 1 auto;
+  min-height:120px;
+  max-height:none;
   font-family: inherit;
   font-size:13px;
   line-height:1.6;
   white-space:pre-wrap;
   overflow:auto;
-  min-height:120px;
-  max-height:calc(100vh - 230px);
   background:rgba(248,250,252,.82);
   border:1px solid rgba(15,23,42,.08);
   border-radius:10px;

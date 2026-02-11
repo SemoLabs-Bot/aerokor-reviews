@@ -315,6 +315,26 @@ function setTableSubLoading() {
 }
 
 function initTable() {
+  const handleRowClick = async (e, row) => {
+    const target = e && e.target;
+    if (target instanceof HTMLElement && target.closest("a")) return;
+
+    const data = row.getData();
+    const requestToken = ++reviewModalRequestToken;
+    openReviewModal(data, "불러오는 중…");
+
+    try {
+      await loadBodyForRow(data);
+      if (requestToken !== reviewModalRequestToken) return;
+      openReviewModal(data, mergedBody(data));
+      // Refresh snippet cell now that body is loaded.
+      try { row.update(data); } catch (err) {}
+    } catch (err) {
+      if (requestToken !== reviewModalRequestToken) return;
+      openReviewModal(data, "본문을 불러오지 못했어요.");
+    }
+  };
+
   table = new Tabulator("#table", {
     height: "calc(100vh - 210px)",
     layout: "fitColumns",
@@ -356,26 +376,10 @@ function initTable() {
         }
       },
     ],
-    rowClick: async function (e, row) {
-      const target = e && e.target;
-      if (target instanceof HTMLElement && target.closest("a")) return;
-
-      const data = row.getData();
-      const requestToken = ++reviewModalRequestToken;
-      openReviewModal(data, "불러오는 중…");
-
-      try {
-        await loadBodyForRow(data);
-        if (requestToken !== reviewModalRequestToken) return;
-        openReviewModal(data, mergedBody(data));
-        // Refresh snippet cell now that body is loaded.
-        try { row.update(data); } catch (err) {}
-      } catch (err) {
-        if (requestToken !== reviewModalRequestToken) return;
-        openReviewModal(data, "본문을 불러오지 못했어요.");
-      }
-    },
   });
+
+  // Tabulator v6 requires row click handling to be registered via event listeners.
+  table.on("rowClick", handleRowClick);
 
   table.on("tableBuilt", () => {
     TABLE_BUILT = true;
