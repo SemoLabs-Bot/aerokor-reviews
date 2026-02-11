@@ -689,7 +689,17 @@ def main():
                 if not label:
                     continue
                 if label == "총합계" or "소계" in label:
-                    sheets_format(args.sheet_id, args.tab_pivot, f"A{i}:E{i}", total_fmt, total_fields, args.account)
+                    # User preference: total/subtotal background should NOT cover computed columns (D/E)
+                    sheets_format(args.sheet_id, args.tab_pivot, f"A{i}:C{i}", total_fmt, total_fields, args.account)
+                    # Clear background on computed columns
+                    sheets_format(
+                        args.sheet_id,
+                        args.tab_pivot,
+                        f"D{i}:E{i}",
+                        {"backgroundColor": {"red": 1, "green": 1, "blue": 1}},
+                        "backgroundColor",
+                        args.account,
+                    )
         except Exception:
             pass
 
