@@ -410,6 +410,36 @@ def sheets_update(sheet_id: str, tab: str, start_cell: str, rows: list[list], ac
     sh(args)
 
 
+def a1_col(n: int) -> str:
+    """1-indexed column number -> A1 column letters."""
+
+    if n < 1:
+        raise ValueError("column must be >= 1")
+    s = ""
+    while n:
+        n, r = divmod(n - 1, 26)
+        s = chr(ord("A") + r) + s
+    return s
+
+
+def sheets_format(sheet_id: str, tab: str, a1_range: str, cell_format: dict, fields: str, account: str | None):
+    args = [
+        "gog",
+        "sheets",
+        "format",
+        sheet_id,
+        f"{tab}!{a1_range}",
+        "--format-json",
+        json.dumps(cell_format, ensure_ascii=False),
+        "--format-fields",
+        fields,
+        "--no-input",
+    ]
+    if account:
+        args += ["--account", account]
+    sh(args)
+
+
 def send_email(*, sheet_id: str, label: str, email_to: str, email_from: str) -> str:
     """Send completion email (same address as meta flow by default)."""
 
@@ -558,6 +588,22 @@ def main():
     for chunk in chunked(matrix, args.append_chunk):
         sheets_append(args.sheet_id, args.tab_raw, chunk, args.account)
 
+    # Apply header formatting (match example-style column header background)
+    header_fmt = {
+        "backgroundColor": {"red": 0.92, "green": 0.92, "blue": 0.92},
+        "textFormat": {"bold": True},
+        "horizontalAlignment": "CENTER",
+        "verticalAlignment": "MIDDLE",
+        "wrapStrategy": "WRAP",
+    }
+    header_fields = "backgroundColor,textFormat.bold,horizontalAlignment,verticalAlignment,wrapStrategy"
+    try:
+        raw_last_col = a1_col(len(cols) if cols else 1)
+        sheets_format(args.sheet_id, args.tab_raw, f"A1:{raw_last_col}1", header_fmt, header_fields, args.account)
+    except Exception:
+        # Formatting should never block data writes.
+        pass
+
     # Replace pivot tab (template-like layout)
     if args.pivot_mode == "replace":
         sheets_clear(args.sheet_id, args.tab_pivot, args.account)
@@ -565,6 +611,12 @@ def main():
         for chunk in chunked(pivot_matrix, 500):
             sheets_update(args.sheet_id, args.tab_pivot, f"A{row_cursor}", chunk, args.account)
             row_cursor += len(chunk)
+
+        # Pivot header row is always at row 3 in our template.
+        try:
+            sheets_format(args.sheet_id, args.tab_pivot, "A3:E3", header_fmt, header_fields, args.account)
+        except Exception:
+            pass
 
     stats = RunStats(
         input_path=str(input_path),
