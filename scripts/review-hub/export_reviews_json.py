@@ -68,16 +68,26 @@ def main() -> None:
     # Pull looker_reviews in pages to avoid the old hard cap (R5000).
     # Sheets will return only populated values within the requested range.
     # Prefer large pages to reduce Google API read quota usage.
-    chunk = int(os.environ.get("REVIEW_HUB_EXPORT_CHUNK") or "20000")
-    chunk = max(1000, min(chunk, 20000))
+    # NOTE: Very large ranges can exceed Google API response limits (especially with 18 columns).
+    # Use a conservative default chunk to avoid silent truncation.
+    chunk = int(os.environ.get("REVIEW_HUB_EXPORT_CHUNK") or "5000")
+    chunk = max(500, min(chunk, 10000))
     max_rows = int(os.environ.get("REVIEW_HUB_EXPORT_MAX_ROWS") or "200000")
 
     headers: list[str] | None = None
     out_rows: list[dict[str, Any]] = []
 
+    # We page the sheet data by row ranges.
+    # IMPORTANT: Row 1 is headers. For the first page, request (chunk + 1) rows
+    # so we still get `chunk` data rows.
     start_row = 1
     while start_row <= max_rows:
         end_row = min(max_rows, start_row + chunk - 1)
+
+        # If this is the first page (includes headers), expand by 1.
+        if start_row == 1:
+            end_row = min(max_rows, end_row + 1)
+
         a1 = f"looker_reviews!A{start_row}:R{end_row}"
         values = gog_get_values(account=account, sheet_id=sheet_id, a1_range=a1)
 
@@ -112,11 +122,10 @@ def main() -> None:
 
             out_rows.append(obj)
 
-        # If we got fewer than chunk rows, we likely reached the end.
-        # (For the first page, values includes the header row.)
+        # If we got fewer than a full page, we likely reached the end.
         got = len(values)
-        effective_got = got - 1 if start_row == 1 else got
-        if effective_got < chunk:
+        expected = (chunk + 1) if start_row == 1 else chunk
+        if got < expected:
             break
 
         start_row += chunk

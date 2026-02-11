@@ -58,13 +58,23 @@ def main() -> None:
     ]]
 
     # Use HSTACK to avoid locale-specific array-literal separators.
+    # NOTE: We used to stop when collected_date (A) is blank.
+    # That caused missing rows if some ingests left A empty.
+    # Instead, treat a row as "present" when body (L) is present.
+    # Also, if collected_date is blank, derive it from collected_at (B).
     formula = (
         "=ARRAYFORMULA("
-        "IF(main_review!A3:A=\"\";;"
+        "IF(main_review!L3:L=\"\";;"
         "HSTACK("
-        "main_review!A3:O;"
+        # A: collected_date (fill from collected_at if missing)
+        "IF(main_review!A3:A<>\"\";main_review!A3:A;IFERROR(TEXT(DATEVALUE(LEFT(main_review!B3:B;10));\"yyyy-mm-dd\");\"\"));"
+        # B:O
+        "main_review!B3:O;"
+        # P: review_date_norm (best-effort)
         "IFERROR(TEXT(DATEVALUE(SUBSTITUTE(LEFT(main_review!H3:H;10);\".\";\"-\"));\"yyyy-mm-dd\");\"\");"
+        # Q: rating_num
         "IFERROR(VALUE(main_review!I3:I);\"\");"
+        # R: body_len
         "LEN(main_review!L3:L)"
         ")"
         ")"
