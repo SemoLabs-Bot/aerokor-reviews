@@ -6,7 +6,7 @@
   "tab": "main_review",
   "appendRange": "main_review!A3:O",
   "mode": "append",
-  "reviewLookbackDays": 0,
+  "reviewLookbackDays": 2,
   "dedup": {
     "strategy": "composite_sha256",
     "fields": ["platform", "product_url", "author", "review_date", "body_hash"],
