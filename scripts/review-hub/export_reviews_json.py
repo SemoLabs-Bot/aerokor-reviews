@@ -166,9 +166,10 @@ def main() -> None:
         body_chunk_id = i // body_chunk_size
         index_chunk_id = i // index_chunk_size
 
-        brand = str(obj.get("brand") or "")
-        platform = str(obj.get("platform") or "")
-        product = str(obj.get("product_name") or "")
+        # Normalize casing: treat brands with different casing as the same brand.
+        brand = str(obj.get("brand") or "").strip().upper()
+        platform = str(obj.get("platform") or "").strip()
+        product = str(obj.get("product_name") or "").strip()
 
         if brand:
             brands_set.add(brand)

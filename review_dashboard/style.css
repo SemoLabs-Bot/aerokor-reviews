@@ -48,6 +48,7 @@ button.ghost:hover{filter:brightness(1.03)}
   height: 36px;
   display: inline-flex;
   align-items: center;
+  font-size: 13px; /* keep the two buttons visually identical */
 }
 
 .ghost-link{display:inline-flex; padding:8px 10px; border-radius:10px; border:1px solid var(--border); background:rgba(255,255,255,.75); font-weight:900; color:var(--text); text-decoration:none}
