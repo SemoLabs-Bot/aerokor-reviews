@@ -189,9 +189,22 @@ function buildChips() {
     .slice(0, 10);
 
   for (const [name, cnt] of entries) {
-    const el = document.createElement("div");
+    const el = document.createElement("button");
+    el.type = "button";
     el.className = "chip";
-    el.textContent = `${name} (${cnt})`;
+    el.title = `${name} (${cnt})`;
+
+    const label = document.createElement("span");
+    label.className = "chip-label";
+    label.textContent = name;
+
+    const count = document.createElement("span");
+    count.className = "chip-count";
+    count.textContent = cnt.toLocaleString();
+
+    el.appendChild(label);
+    el.appendChild(count);
+
     el.onclick = () => {
       // If products list isn't populated yet, this still works because we set the value directly.
       document.getElementById("product").value = name;
@@ -284,11 +297,10 @@ function initTable() {
           return `<span class="body-snippet">${escapeHtml(cut)}</span>`;
         }
       },
-      { title: "수집시각", field: "collected_at", width: 170 },
-      { title: "링크", field: "source_url", width: 90, formatter: (cell) => {
+      { title: "링크", field: "source_url", width: 74, hozAlign: "center", headerHozAlign: "center", formatter: (cell) => {
           const v = cell.getValue();
           if (!v) return "";
-          return `<a href="${v}" target="_blank" rel="noopener noreferrer">열기</a>`;
+          return `<span class="link-inline"><a class="source-link-icon" href="${v}" target="_blank" rel="noopener noreferrer" title="원문 열기" aria-label="원문 열기">↗</a></span>`;
         }
       },
     ],

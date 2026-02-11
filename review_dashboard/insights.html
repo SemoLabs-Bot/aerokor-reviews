@@ -7,26 +7,35 @@
   <link rel="icon" href="data:," />
   <link rel="stylesheet" href="./style.css" />
   <style>
-    /* Allow page scroll on insights */
     html, body{overflow:auto; height:auto}
-    .insights-wrap{padding:14px; max-width:1200px; margin:0 auto}
-    .cards{display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; margin-top:12px}
-    .card{background:rgba(255,255,255,.92); border:1px solid var(--border); border-radius:14px; padding:12px; min-height:140px}
-    .card h3{margin:0 0 10px; font-size:13px}
+    .insights-wrap{padding:16px; max-width:1280px; margin:0 auto}
+    .cards{display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; margin-top:14px}
+    .card{
+      background:linear-gradient(165deg, rgba(255,255,255,.98), rgba(243,247,255,.96));
+      border:1px solid rgba(15,23,42,.12);
+      border-radius:16px;
+      padding:14px;
+      min-height:140px;
+      box-shadow:0 12px 26px rgba(15,23,42,.08);
+    }
+    .card h3{margin:0; font-size:14px; color:rgba(15,23,42,.94)}
+    .card .desc{margin:6px 0 12px; font-size:12px; color:rgba(71,85,105,.94)}
     .card canvas{width:100% !important; height:320px !important}
     .card-wide{grid-column: 1 / -1}
-    /* Give the wide chart more height to improve label readability */
-    .card-wide canvas{height:420px !important}
-    .row{display:flex; gap:12px; align-items:center; justify-content:space-between}
+    .card-wide canvas{height:460px !important}
     .back a{font-weight:900}
-    @media (max-width: 1000px){ .cards{grid-template-columns:1fr} .card canvas{height:260px !important} .card-wide canvas{height:320px !important} }
+    @media (max-width: 1000px){
+      .cards{grid-template-columns:1fr}
+      .card canvas{height:280px !important}
+      .card-wide canvas{height:340px !important}
+    }
   </style>
 </head>
 <body>
   <header class="topbar">
     <div class="title">
       <div class="h1">Review Hub Insights</div>
-      <div class="sub">제품/브랜드 기준으로 요약 지표를 빠르게 보기</div>
+      <div class="sub">Chart.js 기반 시각화로 제품/브랜드 리뷰 지표를 한눈에 확인</div>
       <div class="top-actions">
         <span class="back"><a href="./index.html">← 리뷰 리스트로</a></span>
       </div>
@@ -41,16 +50,19 @@
   <div class="insights-wrap">
     <div class="cards">
       <div class="card">
-        <h3>브랜드별 평균 평점(리뷰 20개 이상)</h3>
+        <h3>브랜드별 평균 평점 (리뷰 20개 이상)</h3>
+        <p class="desc">브랜드별 만족도 추세를 선형 차트로 비교합니다.</p>
         <canvas id="cBrandAvg"></canvas>
       </div>
       <div class="card">
         <h3>평점 분포</h3>
+        <p class="desc">1~5점 분포를 한눈에 직관적으로 확인합니다.</p>
         <canvas id="cRatingDist"></canvas>
       </div>
 
       <div class="card card-wide">
         <h3>상품별 리뷰 수 TOP 15</h3>
+        <p class="desc">리뷰량이 높은 상품을 가로 막대 그래프로 확인합니다.</p>
         <canvas id="cTopProducts"></canvas>
       </div>
     </div>
