@@ -26,11 +26,98 @@ function truncateLabel(s, max=18){
   return x.slice(0, Math.max(0, max-1)) + '…';
 }
 
-function chartBar(el, labels, data, {label, color, horizontal=false, truncateTicks=false}={}){
+function ensureLabelTooltipEl(){
+  let el = document.getElementById('labelTooltip');
+  if(el) return el;
+
+  el = document.createElement('div');
+  el.id = 'labelTooltip';
+  el.style.position = 'fixed';
+  el.style.zIndex = '9999';
+  el.style.maxWidth = '420px';
+  el.style.padding = '8px 10px';
+  el.style.borderRadius = '10px';
+  el.style.border = '1px solid rgba(15,23,42,.14)';
+  el.style.background = 'rgba(255,255,255,.98)';
+  el.style.boxShadow = '0 10px 30px rgba(15,23,42,.12)';
+  el.style.color = 'rgba(15,23,42,.92)';
+  el.style.fontSize = '12px';
+  el.style.fontWeight = '800';
+  el.style.pointerEvents = 'none';
+  el.style.display = 'none';
+
+  document.body.appendChild(el);
+  return el;
+}
+
+function showLabelTooltip({text, x, y}){
+  const el = ensureLabelTooltipEl();
+  el.textContent = text;
+  el.style.left = `${Math.max(8, x)}px`;
+  el.style.top = `${Math.max(8, y)}px`;
+  el.style.display = 'block';
+}
+
+function hideLabelTooltip(){
+  const el = document.getElementById('labelTooltip');
+  if(el) el.style.display = 'none';
+}
+
+function attachYAxisLabelHoverTooltip(chart, fullLabels, {truncateTicks=false}={}){
+  const canvas = chart.canvas;
+  const yScale = chart.scales?.y;
+  if(!yScale) return;
+
+  // Because it's a canvas, we can't literally hover the text nodes.
+  // Instead: when the mouse is on the left label area (before chartArea.left)
+  // and close to a tick's y pixel, we show a tooltip.
+  canvas.addEventListener('mouseleave', hideLabelTooltip);
+
+  canvas.addEventListener('mousemove', (ev) => {
+    const rect = canvas.getBoundingClientRect();
+    const x = ev.clientX - rect.left;
+    const y = ev.clientY - rect.top;
+
+    // Only trigger when hovering the label area (left side of plot).
+    if (x > chart.chartArea.left) {
+      hideLabelTooltip();
+      return;
+    }
+
+    // Find nearest tick by y distance.
+    let bestI = -1;
+    let bestDist = Infinity;
+    for (let i = 0; i < fullLabels.length; i++) {
+      const py = yScale.getPixelForTick(i);
+      const d = Math.abs(py - y);
+      if (d < bestDist) {
+        bestDist = d;
+        bestI = i;
+      }
+    }
+
+    // Tolerance: half of a category step (or a safe fallback)
+    const step = Math.abs(yScale.getPixelForTick(1) - yScale.getPixelForTick(0)) || 18;
+    const tol = Math.max(10, step * 0.45);
+
+    if (bestI >= 0 && bestDist <= tol) {
+      const full = fullLabels[bestI] || '';
+      // Show tooltip on the LEFT of the label area.
+      // Position: a bit left of chartArea.left, aligned with the tick.
+      const screenX = rect.left + Math.max(8, chart.chartArea.left - 14);
+      const screenY = rect.top + yScale.getPixelForTick(bestI) - 16;
+      showLabelTooltip({ text: full, x: screenX - 360, y: screenY });
+    } else {
+      hideLabelTooltip();
+    }
+  });
+}
+
+function chartBar(el, labels, data, {label, color, horizontal=false, truncateTicks=false, tooltipOnLabelHover=false}={}){
   const fullLabels = labels.map(byText);
   const shownLabels = truncateTicks ? fullLabels.map(x=>truncateLabel(x)) : fullLabels;
 
-  return new Chart(el, {
+  const chart = new Chart(el, {
     type: 'bar',
     data: { labels: shownLabels, datasets: [{ label: label||'', data, backgroundColor: color||'rgba(37,99,235,.65)' }] },
     options: {
@@ -39,7 +126,8 @@ function chartBar(el, labels, data, {label, color, horizontal=false, truncateTic
       indexAxis: horizontal ? 'y' : 'x',
       plugins: {
         legend: { display: !!label },
-        tooltip: {
+        // If we want tooltip only on label hover, disable Chart.js tooltip.
+        tooltip: tooltipOnLabelHover ? { enabled: false } : {
           callbacks: {
             // Show the FULL label on hover even when we truncated the tick text.
             title: (items) => {
@@ -66,6 +154,12 @@ function chartBar(el, labels, data, {label, color, horizontal=false, truncateTic
           },
     },
   });
+
+  if (horizontal && tooltipOnLabelHover) {
+    attachYAxisLabelHoverTooltip(chart, fullLabels, { truncateTicks });
+  }
+
+  return chart;
 }
 
 async function main(){
@@ -91,7 +185,14 @@ async function main(){
     document.getElementById('cTopProducts'),
     topProds.map(x=>x[0]),
     topProds.map(x=>x[1]),
-    {label:'리뷰 수', horizontal:true, truncateTicks:true}
+    {
+      label:'리뷰 수',
+      horizontal:true,
+      truncateTicks:true,
+      // 요구사항: 그래프 호버가 아니라 "상품 이름"(y축 라벨) 쪽에 마우스 올리면
+      // 좌측에 툴팁으로 전체 이름 표시
+      tooltipOnLabelHover:true,
+    }
   );
 
   // Brand avg rating (min 20)

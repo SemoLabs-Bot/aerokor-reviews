@@ -8,13 +8,16 @@
   <link rel="stylesheet" href="./style.css" />
   <style>
     .insights-wrap{padding:14px; max-width:1200px; margin:0 auto}
-    .cards{display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; margin-top:12px}
+    .cards{display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; margin-top:12px}
     .card{background:rgba(255,255,255,.92); border:1px solid var(--border); border-radius:14px; padding:12px; min-height:140px}
     .card h3{margin:0 0 10px; font-size:13px}
     .card canvas{width:100% !important; height:320px !important}
+    .card-wide{grid-column: 1 / -1}
+    /* Give the wide chart more height to improve label readability */
+    .card-wide canvas{height:420px !important}
     .row{display:flex; gap:12px; align-items:center; justify-content:space-between}
     .back a{font-weight:900}
-    @media (max-width: 1000px){ .cards{grid-template-columns:1fr} .card canvas{height:260px !important} }
+    @media (max-width: 1000px){ .cards{grid-template-columns:1fr} .card canvas{height:260px !important} .card-wide canvas{height:320px !important} }
   </style>
 </head>
 <body>
@@ -36,16 +39,17 @@
   <div class="insights-wrap">
     <div class="cards">
       <div class="card">
-        <h3>상품별 리뷰 수 TOP 15</h3>
-        <canvas id="cTopProducts"></canvas>
-      </div>
-      <div class="card">
         <h3>브랜드별 평균 평점(리뷰 20개 이상)</h3>
         <canvas id="cBrandAvg"></canvas>
       </div>
       <div class="card">
         <h3>평점 분포</h3>
         <canvas id="cRatingDist"></canvas>
+      </div>
+
+      <div class="card card-wide">
+        <h3>상품별 리뷰 수 TOP 15</h3>
+        <canvas id="cTopProducts"></canvas>
       </div>
     </div>
   </div>
