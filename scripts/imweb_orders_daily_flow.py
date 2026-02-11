@@ -109,19 +109,52 @@ def to_number(x) -> float:
 
 
 def load_xlsx_rows(path: Path) -> tuple[list[str], list[dict]]:
+    """Load rows from an Imweb export workbook.
+
+    The downloaded '기본_양식' files sometimes contain:
+    - a raw data sheet (wide table)
+    - a pivot/summary sheet
+
+    We must pick the sheet that actually contains the raw export columns.
+    Heuristic: choose the first sheet whose header row contains core fields.
+    """
+
     wb = load_workbook(path, data_only=True, read_only=True)
-    ws = wb.worksheets[0]
 
-    rows_iter = ws.iter_rows(values_only=True)
-    try:
-        header_row = next(rows_iter)
-    except StopIteration:
-        raise ValueError("Empty xlsx")
+    required_core = {"주문일", "상품명", "옵션명", "구매수량", "품목실결제가"}
 
-    headers = [normalize_str(h) for h in header_row]
+    picked = None
+    picked_headers: list[str] | None = None
+
+    for ws in wb.worksheets:
+        rows_iter = ws.iter_rows(values_only=True)
+        try:
+            header_row = next(rows_iter)
+        except StopIteration:
+            continue
+
+        headers = [normalize_str(h) for h in header_row]
+        header_set = {h for h in headers if h}
+
+        if required_core.issubset(header_set):
+            picked = ws
+            picked_headers = headers
+            break
+
+    if picked is None:
+        # fallback: first sheet
+        picked = wb.worksheets[0]
+        rows_iter = picked.iter_rows(values_only=True)
+        try:
+            header_row = next(rows_iter)
+        except StopIteration:
+            raise ValueError("Empty xlsx")
+        picked_headers = [normalize_str(h) for h in header_row]
+
+    headers = picked_headers
 
     data: list[dict] = []
-    for row in rows_iter:
+    for row in picked.iter_rows(min_row=2, values_only=True):
         if row is None:
             continue
         if all(v is None or normalize_str(v) == "" for v in row):
@@ -172,7 +205,40 @@ def clean_orders(rows: list[dict]) -> tuple[list[dict], dict]:
     return out, stats
 
 
-def build_pivot(rows: list[dict]) -> list[dict]:
+def is_one_plus_one_set(option_name: str) -> bool:
+    """Return True if this option should be treated as a 1+1 set (sale qty *2).
+
+    IMPORTANT: Template pivot (기본_양식 Sheet2) does NOT double-count every option
+    that contains '1+1'. It appears to double only explicit '1+1SET' bundles.
+
+    Examples that should double:
+    - '구성선택 : [1+1SET] OLSB24W + OLSB24W'
+
+    Examples that should NOT double:
+    - '구성선택 : [기본구성] 1+1 구성'
+    """
+
+    s = normalize_str(option_name)
+    s_norm = s.replace(" ", "")
+    return "1+1SET" in s_norm or "[1+1SET]" in s_norm
+
+
+def build_pivot_template(rows: list[dict], *, include_order_date: bool) -> list[list]:
+    """Build pivot rows matching the Excel template look.
+
+    Output columns (A:E):
+      행 레이블 | 합계 : 구매수량 | 합계 : 품목실결제가 | 객단가 | 실판매수량
+
+    Hierarchy:
+      - If include_order_date: 주문일 -> 상품명 -> 옵션명
+      - Else: 상품명 -> 옵션명
+
+    Notes:
+    - Option rows do NOT show 객단가/실판매수량 in template.
+    - Product rows DO show 객단가 + 실판매수량 (with 1+1SET doubling rule).
+    - We emulate indentation by prefixing spaces.
+    """
+
     required = ["주문일", "상품명", "옵션명", "구매수량", "품목실결제가"]
     for c in required:
         if not any(c in r for r in rows):
@@ -180,33 +246,86 @@ def build_pivot(rows: list[dict]) -> list[dict]:
 
     from collections import defaultdict
 
-    agg = defaultdict(lambda: {"구매수량_SUM": 0.0, "품목실결제가_SUM": 0.0})
+    # Grouping structure
+    # date_key -> product_key -> option_key -> sums
+    def new_bucket():
+        return {
+            "qty": 0.0,
+            "pay": 0.0,
+            "sale_qty": 0.0,
+            "opts": defaultdict(lambda: {"qty": 0.0, "pay": 0.0, "sale_qty": 0.0}),
+        }
+
+    by_date = defaultdict(lambda: defaultdict(new_bucket))
 
     for r in rows:
-        key = (normalize_str(r.get("주문일")), normalize_str(r.get("상품명")), normalize_str(r.get("옵션명")))
-        agg[key]["구매수량_SUM"] += to_number(r.get("구매수량"))
-        agg[key]["품목실결제가_SUM"] += to_number(r.get("품목실결제가"))
+        od = normalize_str(r.get("주문일"))[:10]
+        prod = normalize_str(r.get("상품명"))
+        opt = normalize_str(r.get("옵션명")) or "(비어 있음)"
+        qty = to_number(r.get("구매수량"))
+        pay = to_number(r.get("품목실결제가"))
+        sale_qty = qty * (2.0 if is_one_plus_one_set(opt) else 1.0)
 
-    out = []
-    for (od, prod, opt), v in agg.items():
-        qty = float(v["구매수량_SUM"])
-        pay = float(v["품목실결제가_SUM"])
-        sale_qty = qty * (2.0 if "1+1" in opt else 1.0)
-        aov = (pay / sale_qty) if sale_qty else 0.0
-        out.append(
-            {
-                "주문일": od,
-                "상품명": prod,
-                "옵션명": opt,
-                "구매수량_SUM": qty,
-                "품목실결제가_SUM": pay,
-                "실판매수량": sale_qty,
-                "객단가": aov,
-            }
-        )
+        date_key = od if include_order_date else "__SINGLE__"
+        b = by_date[date_key][prod]
+        b["qty"] += qty
+        b["pay"] += pay
+        b["sale_qty"] += sale_qty
+        o = b["opts"][opt]
+        o["qty"] += qty
+        o["pay"] += pay
+        o["sale_qty"] += sale_qty
 
-    # deterministic sort
-    out.sort(key=lambda r: (r["주문일"], r["상품명"], r["옵션명"]))
+    def aov(pay: float, sale_qty: float) -> float:
+        return (pay / sale_qty) if sale_qty else 0.0
+
+    out: list[list] = []
+    # Template has two blank rows
+    out.append(["", "", "", "", ""])
+    out.append(["", "", "", "", ""])
+    # Template header shows only first 3 labels; cols D/E are blank
+    out.append(["행 레이블", "합계 : 구매수량", "합계 : 품목실결제가", "", ""])
+
+    # Deterministic ordering
+    date_keys = sorted(by_date.keys())
+
+    grand_qty = grand_pay = grand_sale = 0.0
+
+    for dk in date_keys:
+        products = by_date[dk]
+
+        # date-level subtotal if we include order date
+        if include_order_date:
+            date_qty = sum(products[p]["qty"] for p in products)
+            date_pay = sum(products[p]["pay"] for p in products)
+            date_sale = sum(products[p]["sale_qty"] for p in products)
+            # Keep date row similar style (no indentation)
+            out.append([dk, date_qty, date_pay, aov(date_pay, date_sale), date_sale])
+
+        for prod in sorted(products.keys()):
+            b = products[prod]
+            grand_qty += b["qty"]
+            grand_pay += b["pay"]
+            grand_sale += b["sale_qty"]
+
+            opts_sorted = sorted(b["opts"].keys())
+            only_empty_opt = (len(opts_sorted) == 1 and opts_sorted[0] == "(비어 있음)")
+
+            # Template quirk: if the only option is (비어 있음), the product row shows blank aov/sale,
+            # and the (비어 있음) row shows aov/sale instead.
+            prod_aov = "" if only_empty_opt else aov(b["pay"], b["sale_qty"])
+            prod_sale = "" if only_empty_opt else b["sale_qty"]
+
+            out.append([prod, b["qty"], b["pay"], prod_aov, prod_sale])
+
+            for opt in opts_sorted:
+                o = b["opts"][opt]
+                if only_empty_opt:
+                    out.append([opt, o["qty"], o["pay"], aov(b["pay"], b["sale_qty"]), b["sale_qty"]])
+                else:
+                    out.append([opt, o["qty"], o["pay"], "", ""])
+
+    out.append(["총합계", grand_qty, grand_pay, "", ""])
     return out
 
 
@@ -293,6 +412,15 @@ def main():
     ap.add_argument("--pivot-mode", choices=["replace"], default="replace")
     ap.add_argument("--append-chunk", type=int, default=300)
 
+    # Safety/testing
+    ap.add_argument("--dry-run", action="store_true", help="Do not write to Google Sheets. Print pivot preview only.")
+    ap.add_argument(
+        "--pivot-include-order-date",
+        choices=["auto", "yes", "no"],
+        default="auto",
+        help="Include 주문일 group in pivot. auto=include only when multiple distinct dates are present.",
+    )
+
     args = ap.parse_args()
 
     if not args.input and not args.from_downloads:
@@ -305,7 +433,43 @@ def main():
 
     headers, rows_raw = load_xlsx_rows(input_path)
     rows_clean, s = clean_orders(rows_raw)
-    pivot_rows = build_pivot(rows_clean)
+
+    # Decide whether to include 주문일 group in pivot
+    distinct_dates = sorted({normalize_str(r.get("주문일"))[:10] for r in rows_clean if normalize_str(r.get("주문일"))})
+    include_date = False
+    if args.pivot_include_order_date == "yes":
+        include_date = True
+    elif args.pivot_include_order_date == "no":
+        include_date = False
+    else:  # auto
+        include_date = len(distinct_dates) > 1
+
+    pivot_matrix = build_pivot_template(rows_clean, include_order_date=include_date)
+
+    # DRY RUN: do not write to Sheets
+    if args.dry_run:
+        print(
+            json.dumps(
+                {
+                    "status": "dry_run",
+                    "input": str(input_path),
+                    "rows_total": s["rows_total"],
+                    "rows_after_clean": s["rows_after_clean"],
+                    "dropped": {
+                        "cancel": s["rows_cancel_dropped"],
+                        "return": s["rows_return_dropped"],
+                        "pending": s["rows_pending_dropped"],
+                    },
+                    "pivot_include_order_date": include_date,
+                    "distinct_dates": distinct_dates,
+                    "pivot_preview": pivot_matrix[:30],
+                    "note": "DRY RUN ONLY: did not write to Google Sheets",
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+        )
+        return
 
     # Append cleaned rows to RAW tab
     sheet_header = sheets_get_header(args.sheet_id, args.tab_raw, args.account)
@@ -321,21 +485,11 @@ def main():
     for chunk in chunked(matrix, args.append_chunk):
         sheets_append(args.sheet_id, args.tab_raw, chunk, args.account)
 
-    # Replace pivot tab
+    # Replace pivot tab (template-like layout)
     if args.pivot_mode == "replace":
         sheets_clear(args.sheet_id, args.tab_pivot, args.account)
-        pv_cols = [
-            "주문일",
-            "상품명",
-            "옵션명",
-            "구매수량_SUM",
-            "품목실결제가_SUM",
-            "실판매수량",
-            "객단가",
-        ]
-        out_rows = [pv_cols] + rows_to_matrix(pivot_rows, pv_cols)
         row_cursor = 1
-        for chunk in chunked(out_rows, 500):
+        for chunk in chunked(pivot_matrix, 500):
             sheets_update(args.sheet_id, args.tab_pivot, f"A{row_cursor}", chunk, args.account)
             row_cursor += len(chunk)
 
@@ -346,7 +500,7 @@ def main():
         rows_return_dropped=s["rows_return_dropped"],
         rows_pending_dropped=s["rows_pending_dropped"],
         rows_after_clean=s["rows_after_clean"],
-        pivot_rows=int(len(pivot_rows)),
+        pivot_rows=int(max(0, len(pivot_matrix) - 3)),
     )
 
     log_dir = Path("logs/imweb-orders")
