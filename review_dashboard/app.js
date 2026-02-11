@@ -25,8 +25,12 @@ let PENDING_DATA = null;
 let reviewModalEl = null;
 let reviewModalBodyEl = null;
 let reviewModalMetaEl = null;
+let reviewModalRequestToken = 0;
+let reviewModalRowKey = null;
 
 function closeReviewModal() {
+  reviewModalRequestToken += 1;
+  reviewModalRowKey = null;
   if (!reviewModalEl) return;
   reviewModalEl.classList.remove("open");
   reviewModalEl.setAttribute("aria-hidden", "true");
@@ -35,6 +39,7 @@ function closeReviewModal() {
 
 function openReviewModal(data, bodyText) {
   if (!reviewModalEl) return;
+  reviewModalRowKey = String(data.dedup_key || data.review_id || "");
   const product = String(data.product_name || "(상품 미상)");
   const author = String(data.author || "작성자 미상");
   const rating = Number(data.rating_num);
@@ -359,14 +364,18 @@ function initTable() {
       if (target instanceof HTMLElement && target.closest("a")) return;
 
       const data = row.getData();
+      const rowKey = String(data.dedup_key || data.review_id || "");
+      const requestToken = ++reviewModalRequestToken;
       openReviewModal(data, "불러오는 중…");
 
       try {
         await loadBodyForRow(data);
+        if (requestToken !== reviewModalRequestToken || rowKey !== reviewModalRowKey) return;
         openReviewModal(data, mergedBody(data));
         // Refresh snippet cell now that body is loaded.
         try { row.update(data); } catch (err) {}
       } catch (err) {
+        if (requestToken !== reviewModalRequestToken || rowKey !== reviewModalRowKey) return;
         openReviewModal(data, "본문을 불러오지 못했어요.");
       }
     },
