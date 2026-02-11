@@ -588,9 +588,18 @@ def main():
     for chunk in chunked(matrix, args.append_chunk):
         sheets_append(args.sheet_id, args.tab_raw, chunk, args.account)
 
-    # Apply header formatting (match example-style column header background)
-    header_fmt = {
-        "backgroundColor": {"red": 0.92, "green": 0.92, "blue": 0.92},
+    # Apply header formatting
+    # - RAW header: #f5f5a1
+    # - Pivot header: #d4dde9
+    raw_header_fmt = {
+        "backgroundColor": {"red": 245 / 255, "green": 245 / 255, "blue": 161 / 255},
+        "textFormat": {"bold": True},
+        "horizontalAlignment": "CENTER",
+        "verticalAlignment": "MIDDLE",
+        "wrapStrategy": "WRAP",
+    }
+    pivot_header_fmt = {
+        "backgroundColor": {"red": 212 / 255, "green": 221 / 255, "blue": 233 / 255},
         "textFormat": {"bold": True},
         "horizontalAlignment": "CENTER",
         "verticalAlignment": "MIDDLE",
@@ -599,7 +608,7 @@ def main():
     header_fields = "backgroundColor,textFormat.bold,horizontalAlignment,verticalAlignment,wrapStrategy"
     try:
         raw_last_col = a1_col(len(cols) if cols else 1)
-        sheets_format(args.sheet_id, args.tab_raw, f"A1:{raw_last_col}1", header_fmt, header_fields, args.account)
+        sheets_format(args.sheet_id, args.tab_raw, f"A1:{raw_last_col}1", raw_header_fmt, header_fields, args.account)
     except Exception:
         # Formatting should never block data writes.
         pass
@@ -614,7 +623,7 @@ def main():
 
         # Pivot header row is always at row 3 in our template.
         try:
-            sheets_format(args.sheet_id, args.tab_pivot, "A3:E3", header_fmt, header_fields, args.account)
+            sheets_format(args.sheet_id, args.tab_pivot, "A3:E3", pivot_header_fmt, header_fields, args.account)
         except Exception:
             pass
 
