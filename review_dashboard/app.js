@@ -271,7 +271,10 @@ function initSidebarToggle() {
   const key = "reviewHub.sidebarCollapsed";
   const apply = (collapsed) => {
     document.body.classList.toggle("sidebar-collapsed", !!collapsed);
-    btn.textContent = collapsed ? "필터/빠른보기 열기" : "필터/빠른보기 닫기";
+    // Copy for the button label:
+    // - open (sidebar visible): show "close left menu" with a left chevron
+    // - collapsed (sidebar hidden): show "open left menu" with a hamburger icon
+    btn.textContent = collapsed ? "☰ 좌측 메뉴 열기" : "⟨ 좌측 메뉴 닫기";
     try { if (table) table.redraw(true); } catch (e) {}
   };
 

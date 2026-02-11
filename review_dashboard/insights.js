@@ -20,16 +20,51 @@ function computeStats(rows){
   return { n, avg: cnt? sum/cnt : null, last };
 }
 
-function chartBar(el, labels, data, {label, color}={}){
+function truncateLabel(s, max=18){
+  const x = byText(s);
+  if(x.length <= max) return x;
+  return x.slice(0, Math.max(0, max-1)) + '…';
+}
+
+function chartBar(el, labels, data, {label, color, horizontal=false, truncateTicks=false}={}){
+  const fullLabels = labels.map(byText);
+  const shownLabels = truncateTicks ? fullLabels.map(x=>truncateLabel(x)) : fullLabels;
+
   return new Chart(el, {
     type: 'bar',
-    data: { labels, datasets: [{ label: label||'', data, backgroundColor: color||'rgba(37,99,235,.65)' }] },
+    data: { labels: shownLabels, datasets: [{ label: label||'', data, backgroundColor: color||'rgba(37,99,235,.65)' }] },
     options: {
       responsive: true,
       maintainAspectRatio: false,
-      plugins: { legend: { display: !!label } },
-      scales: { x: { ticks: { autoSkip: false, maxRotation: 60, minRotation: 0 } }, y: { beginAtZero: true } }
-    }
+      indexAxis: horizontal ? 'y' : 'x',
+      plugins: {
+        legend: { display: !!label },
+        tooltip: {
+          callbacks: {
+            // Show the FULL label on hover even when we truncated the tick text.
+            title: (items) => {
+              const i = items?.[0]?.dataIndex;
+              if(i == null) return '';
+              return fullLabels[i] || '';
+            },
+          },
+        },
+      },
+      scales: horizontal
+        ? {
+            x: { beginAtZero: true },
+            y: {
+              ticks: {
+                autoSkip: false,
+                callback: (v, i) => truncateTicks ? truncateLabel(fullLabels[i]) : (fullLabels[i] || ''),
+              },
+            },
+          }
+        : {
+            x: { ticks: { autoSkip: false, maxRotation: 60, minRotation: 0 } },
+            y: { beginAtZero: true },
+          },
+    },
   });
 }
 
@@ -50,7 +85,14 @@ async function main(){
     prodCount.set(k, (prodCount.get(k)||0)+1);
   }
   const topProds = Array.from(prodCount.entries()).sort((a,b)=>b[1]-a[1]).slice(0,15);
-  chartBar(document.getElementById('cTopProducts'), topProds.map(x=>x[0]), topProds.map(x=>x[1]), {label:'리뷰 수'});
+  // Use a horizontal bar chart to avoid label overlap; truncate long names with ellipsis.
+  // Full names are shown in tooltip on hover.
+  chartBar(
+    document.getElementById('cTopProducts'),
+    topProds.map(x=>x[0]),
+    topProds.map(x=>x[1]),
+    {label:'리뷰 수', horizontal:true, truncateTicks:true}
+  );
 
   // Brand avg rating (min 20)
   const brandAgg = new Map();
