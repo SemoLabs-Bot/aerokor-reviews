@@ -22,6 +22,56 @@ let table;
 let TABLE_BUILT = false;
 let PENDING_DATA = null;
 
+let reviewModalEl = null;
+let reviewModalBodyEl = null;
+let reviewModalMetaEl = null;
+
+function closeReviewModal() {
+  if (!reviewModalEl) return;
+  reviewModalEl.classList.remove("open");
+  reviewModalEl.setAttribute("aria-hidden", "true");
+  document.body.style.overflow = "";
+}
+
+function openReviewModal(data, bodyText) {
+  if (!reviewModalEl) return;
+  const product = String(data.product_name || "(상품 미상)");
+  const author = String(data.author || "작성자 미상");
+  const rating = Number(data.rating_num);
+  const ratingText = Number.isFinite(rating) && rating > 0 ? `${rating}점` : "평점 없음";
+  const reviewDate = String(data.review_date_norm || data.review_date || "-");
+
+  const titleEl = document.getElementById("reviewModalTitle");
+  if (titleEl) titleEl.textContent = product;
+  if (reviewModalMetaEl) reviewModalMetaEl.textContent = `작성자: ${author} · 평점: ${ratingText} · 리뷰일: ${reviewDate}`;
+  if (reviewModalBodyEl) reviewModalBodyEl.textContent = bodyText || "(리뷰 본문이 비어있어요.)";
+
+  reviewModalEl.classList.add("open");
+  reviewModalEl.setAttribute("aria-hidden", "false");
+  document.body.style.overflow = "hidden";
+}
+
+function initReviewModal() {
+  reviewModalEl = document.getElementById("reviewModal");
+  reviewModalBodyEl = document.getElementById("reviewModalBody");
+  reviewModalMetaEl = document.getElementById("reviewModalMeta");
+  if (!reviewModalEl) return;
+
+  const closeBtn = document.getElementById("reviewModalClose");
+  if (closeBtn) closeBtn.onclick = closeReviewModal;
+
+  reviewModalEl.addEventListener("click", (ev) => {
+    const target = ev.target;
+    if (!(target instanceof HTMLElement)) return;
+    if (target.dataset.close === "1") closeReviewModal();
+  });
+
+  document.addEventListener("keydown", (ev) => {
+    if (ev.key === "Escape" && reviewModalEl.classList.contains("open")) closeReviewModal();
+  });
+}
+
+
 function uniq(arr) {
   return Array.from(new Set(arr.filter(Boolean)));
 }
@@ -189,9 +239,22 @@ function buildChips() {
     .slice(0, 10);
 
   for (const [name, cnt] of entries) {
-    const el = document.createElement("div");
+    const el = document.createElement("button");
+    el.type = "button";
     el.className = "chip";
-    el.textContent = `${name} (${cnt})`;
+    el.title = `${name} (${cnt})`;
+
+    const label = document.createElement("span");
+    label.className = "chip-label";
+    label.textContent = name;
+
+    const count = document.createElement("span");
+    count.className = "chip-count";
+    count.textContent = cnt.toLocaleString();
+
+    el.appendChild(label);
+    el.appendChild(count);
+
     el.onclick = () => {
       // If products list isn't populated yet, this still works because we set the value directly.
       document.getElementById("product").value = name;
@@ -284,44 +347,27 @@ function initTable() {
           return `<span class="body-snippet">${escapeHtml(cut)}</span>`;
         }
       },
-      { title: "수집시각", field: "collected_at", width: 170 },
-      { title: "링크", field: "source_url", width: 90, formatter: (cell) => {
+      { title: "링크", field: "source_url", width: 74, hozAlign: "center", headerHozAlign: "center", formatter: (cell) => {
           const v = cell.getValue();
           if (!v) return "";
-          return `<a href="${v}" target="_blank" rel="noopener noreferrer">열기</a>`;
+          return `<span class="link-inline"><a class="source-link-icon" href="${v}" target="_blank" rel="noopener noreferrer" title="원문 열기" aria-label="원문 열기">↗</a></span>`;
         }
       },
     ],
     rowClick: async function (e, row) {
-      const el = row.getElement();
-      const already = el.querySelector(".review-body");
-      if (already) {
-        already.remove();
-        return;
-      }
+      const target = e && e.target;
+      if (target instanceof HTMLElement && target.closest("a")) return;
 
       const data = row.getData();
-      const body = document.createElement("div");
-      body.className = "review-body";
-
-      const meta = document.createElement("div");
-      meta.className = "review-meta";
-      meta.textContent = `platform=${data.platform || ""} · source_url=${data.source_url ? "(있음)" : ""} · key=${String(data.dedup_key || "").slice(0, 8)}`;
-
-      const txt = document.createElement("div");
-      txt.textContent = "불러오는 중…";
-
-      body.appendChild(meta);
-      body.appendChild(txt);
-      el.appendChild(body);
+      openReviewModal(data, "불러오는 중…");
 
       try {
         await loadBodyForRow(data);
-        txt.textContent = mergedBody(data);
+        openReviewModal(data, mergedBody(data));
         // Refresh snippet cell now that body is loaded.
         try { row.update(data); } catch (err) {}
       } catch (err) {
-        txt.textContent = "본문을 불러오지 못했어요.";
+        openReviewModal(data, "본문을 불러오지 못했어요.");
       }
     },
   });
@@ -387,6 +433,7 @@ async function main() {
     setOptions(document.getElementById("platform"), platforms);
     setOptions(document.getElementById("product"), products);
 
+    initReviewModal();
     initTable();
     initSidebarToggle();
     buildChips();
@@ -415,6 +462,7 @@ async function main() {
   // Products list is intentionally not preloaded (can be huge). We'll build it on demand.
   setOptions(document.getElementById("product"), [], { withAll: true });
 
+  initReviewModal();
   initTable();
   initSidebarToggle();
 
