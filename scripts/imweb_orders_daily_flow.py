@@ -617,9 +617,12 @@ def main():
     for chunk in chunked(matrix, args.append_chunk):
         sheets_append(args.sheet_id, args.tab_raw, chunk, args.account)
 
-    # Apply header formatting
+    # Apply formatting
     # - RAW header: #f5f5a1
     # - Pivot header: #d4dde9
+    # User preference: do NOT paint entire columns; keep formatting tight and clear backgrounds first.
+    white_bg = {"backgroundColor": {"red": 1, "green": 1, "blue": 1}}
+
     raw_header_fmt = {
         "backgroundColor": {"red": 245 / 255, "green": 245 / 255, "blue": 161 / 255},
         "textFormat": {"bold": True},
@@ -635,7 +638,11 @@ def main():
         "wrapStrategy": "WRAP",
     }
     header_fields = "backgroundColor,textFormat.bold,horizontalAlignment,verticalAlignment,wrapStrategy"
+
     try:
+        # RAW: clear body background so we don't accidentally color whole columns.
+        sheets_format(args.sheet_id, args.tab_raw, "A2:ZZ20000", white_bg, "backgroundColor", args.account)
+
         raw_last_col = a1_col(len(cols) if cols else 1)
         sheets_format(args.sheet_id, args.tab_raw, f"A1:{raw_last_col}1", raw_header_fmt, header_fields, args.account)
 
@@ -663,21 +670,17 @@ def main():
 
         # Pivot header row is always at row 3 in our template.
         # User preference: header background should NOT cover the extra computed columns (D/E).
+        # Also clear the whole pivot area background first to avoid accidental column-wide coloring.
         try:
+            sheets_format(args.sheet_id, args.tab_pivot, "A1:Z1000", white_bg, "backgroundColor", args.account)
+
             sheets_format(args.sheet_id, args.tab_pivot, "A3:C3", pivot_header_fmt, header_fields, args.account)
             # Explicitly clear header background on computed columns area (D/E).
-            sheets_format(
-                args.sheet_id,
-                args.tab_pivot,
-                "D3:E3",
-                {"backgroundColor": {"red": 1, "green": 1, "blue": 1}},
-                "backgroundColor",
-                args.account,
-            )
+            sheets_format(args.sheet_id, args.tab_pivot, "D3:E3", white_bg, "backgroundColor", args.account)
         except Exception:
             pass
 
-        # User preference: apply background color for grand total / subtotals.
+        # User preference: apply background color for grand total / subtotals (A:C only).
         total_fmt = {
             "backgroundColor": {"red": 212 / 255, "green": 221 / 255, "blue": 233 / 255},
             "textFormat": {"bold": True},
@@ -689,17 +692,8 @@ def main():
                 if not label:
                     continue
                 if label == "총합계" or "소계" in label:
-                    # User preference: total/subtotal background should NOT cover computed columns (D/E)
                     sheets_format(args.sheet_id, args.tab_pivot, f"A{i}:C{i}", total_fmt, total_fields, args.account)
-                    # Clear background on computed columns
-                    sheets_format(
-                        args.sheet_id,
-                        args.tab_pivot,
-                        f"D{i}:E{i}",
-                        {"backgroundColor": {"red": 1, "green": 1, "blue": 1}},
-                        "backgroundColor",
-                        args.account,
-                    )
+                    sheets_format(args.sheet_id, args.tab_pivot, f"D{i}:E{i}", white_bg, "backgroundColor", args.account)
         except Exception:
             pass
 
