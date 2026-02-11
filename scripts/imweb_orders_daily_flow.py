@@ -488,10 +488,39 @@ def chunked(seq: list[list], n: int):
         yield seq[i : i + n]
 
 
+def excel_serial_to_datetime(x: float):
+    """Convert Excel serial date (days since 1899-12-30) to datetime.
+
+    Google Sheets uses the same epoch, so formatting the cell as DATE/DATETIME
+    would also work, but we normalize to a readable string to avoid ambiguity.
+    """
+
+    from datetime import datetime, timedelta
+
+    base = datetime(1899, 12, 30)
+    return base + timedelta(days=float(x))
+
+
 def rows_to_matrix(rows: list[dict], cols: list[str]) -> list[list]:
     out: list[list] = []
     for r in rows:
-        out.append([r.get(c, "") for c in cols])
+        row_out = []
+        for c in cols:
+            v = r.get(c, "")
+            if c == "주문일":
+                try:
+                    # openpyxl may give datetime or Excel serial float.
+                    if hasattr(v, "strftime"):
+                        v = v.strftime("%Y-%m-%d %H:%M")
+                    else:
+                        s = normalize_str(v)
+                        if s and re.fullmatch(r"\d+(\.\d+)?", s):
+                            dt = excel_serial_to_datetime(float(s))
+                            v = dt.strftime("%Y-%m-%d %H:%M")
+                except Exception:
+                    pass
+            row_out.append(v)
+        out.append(row_out)
     return out
 
 
