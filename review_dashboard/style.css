@@ -47,7 +47,7 @@ button.ghost:hover{transform:translateY(-1px)}
 /* Notifications */
 .notif{position:relative}
 .notif-btn{padding:8px 10px}
-.notif-icon{font-size:14px; line-height:1}
+.notif-icon{width:16px; height:16px; stroke-width:2.2; line-height:1}
 .notif-dot{
   position:absolute;
   top:6px;
@@ -73,6 +73,10 @@ button.ghost:hover{transform:translateY(-1px)}
   padding:10px;
   display:none;
   z-index:80;
+}
+.stats-notif .notif-panel{
+  left:0;
+  right:auto;
 }
 .notif-panel.open{display:block}
 .notif-head{display:flex; align-items:center; justify-content:space-between; gap:10px; padding:6px 6px 10px; border-bottom:1px solid rgba(15,23,42,.10)}
@@ -104,6 +108,15 @@ button.mini.danger{border-color:rgba(239,68,68,.35); color:rgba(185,28,28,.98); 
 .ghost-link:hover{transform:translateY(-1px)}
 
 .stats{display:flex; gap:10px; flex-wrap:wrap; justify-content:flex-end}
+.stats-notif{
+  display:flex;
+  align-items:center;
+}
+.stats-notif .notif-btn{
+  min-width:44px;
+  height:48px;
+  border-radius:14px;
+}
 .stat{
   min-width:140px;
   background:linear-gradient(155deg, rgba(255,255,255,.98), rgba(243,246,255,.96));
@@ -408,7 +421,7 @@ button:hover{transform:translateY(-1px)}
 .review-modal{
   position:fixed;
   inset:0;
-  z-index:60;
+  z-index:200;
   display:none;
   align-items:center;
   justify-content:center;
