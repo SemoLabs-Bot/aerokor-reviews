@@ -1,10 +1,21 @@
 /* global Tabulator */
 
-const DATA_URL = "../data/reviews_index.json";
+const META_URL = "../data/reviews_meta.json";
+const INDEX_FALLBACK_URL = "../data/reviews_index.json";
 const LEGACY_URL = "../data/reviews.json";
+
+let INDEX_DIR = "../data/reviews_index";
+let INDEX_FILE_PREFIX = "chunk-";
+let INDEX_CHUNKS = 0;
+
 let BODY_DIR = "../data/reviews_body";
 let BODY_FILE_PREFIX = "chunk-";
+
 const BODY_CACHE = new Map(); // chunkId -> by_key map
+
+// Progressive loading state
+let LOADED_CHUNKS = 0;
+let LOADING_REST = false;
 
 let ALL = [];
 let table;
@@ -167,6 +178,7 @@ function buildChips() {
   const chips = document.getElementById("chips");
   chips.innerHTML = "";
 
+  // While background loading, chips based on partial data are okay.
   const topProducts = {};
   for (const r of ALL) {
     const k = r.product_name || "(unknown)";
@@ -181,6 +193,7 @@ function buildChips() {
     el.className = "chip";
     el.textContent = `${name} (${cnt})`;
     el.onclick = () => {
+      // If products list isn't populated yet, this still works because we set the value directly.
       document.getElementById("product").value = name;
       applyFilters();
     };
@@ -206,7 +219,7 @@ async function loadBodyForRow(r) {
 
   if (!BODY_CACHE.has(chunkId)) {
     const url = `${BODY_DIR}/${BODY_FILE_PREFIX}${String(chunkId).padStart(3, "0")}.json`;
-    const res = await fetch(url, { cache: "no-store" });
+    const res = await fetch(url, { cache: "force-cache" });
     const payload = await res.json();
     BODY_CACHE.set(chunkId, payload.by_key || {});
   }
@@ -218,6 +231,22 @@ async function loadBodyForRow(r) {
     r.body = b.body || "";
   }
   return r;
+}
+
+async function fetchIndexChunk(chunkId) {
+  const url = `${INDEX_DIR}/${INDEX_FILE_PREFIX}${String(chunkId).padStart(3, "0")}.json`;
+  const res = await fetch(url, { cache: "force-cache" });
+  const payload = await res.json();
+  return payload.rows || [];
+}
+
+function setTableSubLoading() {
+  const el = document.getElementById("tableSub");
+  if (!el) return;
+  const total = INDEX_CHUNKS;
+  if (!total) return;
+  const pct = Math.floor((LOADED_CHUNKS / total) * 100);
+  el.textContent = `로드 중… ${LOADED_CHUNKS}/${total} chunks (${pct}%)`;
 }
 
 function initTable() {
@@ -336,37 +365,101 @@ function initSidebarToggle() {
 }
 
 async function main() {
-  // Prefer the optimized index payload; fall back to legacy reviews.json.
-  let payload;
+  // Load meta first (small), then progressively load index chunks.
+  let meta;
   try {
-    const res = await fetch(DATA_URL, { cache: "no-store" });
-    payload = await res.json();
+    const r = await fetch(META_URL, { cache: "no-store" });
+    meta = await r.json();
   } catch (e) {
+    // Fallback path (older deployments)
     const res2 = await fetch(LEGACY_URL, { cache: "no-store" });
-    payload = await res2.json();
+    const legacy = await res2.json();
+    ALL = legacy.rows || [];
+
+    document.getElementById("sheetId").textContent = legacy.sheet_id || "";
+    document.getElementById("statUpdated").textContent = legacy.generated_at ? legacy.generated_at.replace("T", " ").slice(0, 19) : "-";
+
+    const brands = uniq(ALL.map(r => r.brand)).sort();
+    const platforms = uniq(ALL.map(r => r.platform)).sort();
+    const products = uniq(ALL.map(r => r.product_name)).sort();
+
+    setOptions(document.getElementById("brand"), brands);
+    setOptions(document.getElementById("platform"), platforms);
+    setOptions(document.getElementById("product"), products);
+
+    initTable();
+    initSidebarToggle();
+    buildChips();
+    applyFilters();
+    document.getElementById("apply").onclick = applyFilters;
+    document.getElementById("clear").onclick = clearFilters;
+    document.getElementById("q").addEventListener("keydown", (ev) => {
+      if (ev.key === "Enter") applyFilters();
+    });
+    return;
   }
 
-  ALL = payload.rows || [];
+  INDEX_DIR = `../data/${meta.index?.dir || "reviews_index"}`;
+  INDEX_FILE_PREFIX = meta.index?.file_prefix || "chunk-";
+  INDEX_CHUNKS = Number(meta.index?.chunks || 0);
 
-  if (payload.body_dir) BODY_DIR = `../data/${payload.body_dir}`;
-  if (payload.body_file_prefix) BODY_FILE_PREFIX = payload.body_file_prefix;
+  BODY_DIR = `../data/${meta.body?.dir || "reviews_body"}`;
+  BODY_FILE_PREFIX = meta.body?.file_prefix || "chunk-";
 
-  document.getElementById("sheetId").textContent = payload.sheet_id || "";
-  document.getElementById("statUpdated").textContent = payload.generated_at ? payload.generated_at.replace("T", " ").slice(0, 19) : "-";
+  document.getElementById("sheetId").textContent = meta.sheet_id || "";
+  document.getElementById("statUpdated").textContent = meta.generated_at ? meta.generated_at.replace("T", " ").slice(0, 19) : "-";
 
-  const brands = uniq(ALL.map(r => r.brand)).sort();
-  const platforms = uniq(ALL.map(r => r.platform)).sort();
-  const products = uniq(ALL.map(r => r.product_name)).sort();
-
-  setOptions(document.getElementById("brand"), brands);
-  setOptions(document.getElementById("platform"), platforms);
-  setOptions(document.getElementById("product"), products);
+  // Set filter options from meta dims (fast; no need to scan ALL)
+  setOptions(document.getElementById("brand"), (meta.dims?.brands || []));
+  setOptions(document.getElementById("platform"), (meta.dims?.platforms || []));
+  // Products list is intentionally not preloaded (can be huge). We'll build it on demand.
+  setOptions(document.getElementById("product"), [], { withAll: true });
 
   initTable();
   initSidebarToggle();
+
+  // Load first chunk quickly for TTI
+  const first = await fetchIndexChunk(0);
+  ALL = first;
+  LOADED_CHUNKS = 1;
+  setTableSubLoading();
+
   buildChips();
-  // Initial render will happen after Tabulator emits tableBuilt.
   applyFilters();
+
+  // Background-load remaining chunks (non-blocking)
+  if (INDEX_CHUNKS > 1) {
+    LOADING_REST = true;
+    (async () => {
+      for (let c = 1; c < INDEX_CHUNKS; c++) {
+        try {
+          const part = await fetchIndexChunk(c);
+          if (part && part.length) {
+            ALL.push(...part);
+          }
+          LOADED_CHUNKS = c + 1;
+          setTableSubLoading();
+        } catch (e) {
+          // ignore chunk failure
+        }
+      }
+      LOADING_REST = false;
+      // Refresh products list once at the end.
+      const products = uniq(ALL.map(r => r.product_name)).sort();
+      setOptions(document.getElementById("product"), products);
+      buildChips();
+      // Re-apply filters to include everything.
+      applyFilters();
+    })();
+  }
+
+  document.getElementById("apply").onclick = applyFilters;
+  document.getElementById("clear").onclick = clearFilters;
+
+  // Enter to apply
+  document.getElementById("q").addEventListener("keydown", (ev) => {
+    if (ev.key === "Enter") applyFilters();
+  });
 
   document.getElementById("apply").onclick = applyFilters;
   document.getElementById("clear").onclick = clearFilters;

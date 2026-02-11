@@ -136,37 +136,84 @@ def main() -> None:
     generated_at = datetime.now().astimezone().isoformat()
     # --- Output (optimized for dashboard load) ---
     # We split data into:
-    # 1) reviews_index.json: lightweight rows used for filters/table/insights
-    # 2) reviews_body/chunk-XYZ.json: heavy bodies loaded lazily on row expand
+    # 1) reviews_meta.json: small metadata + dimensions for filters
+    # 2) reviews_index/chunk-XYZ.json: lightweight rows (chunked) for faster TTI
+    # 3) reviews_body/chunk-XYZ.json: heavy bodies loaded lazily on row expand
+    # 4) insights.json: precomputed aggregates so insights page doesn't load all rows
 
     body_chunk_size = int(os.environ.get("REVIEW_HUB_BODY_CHUNK_SIZE") or "2000")
     body_chunk_size = max(200, min(body_chunk_size, 5000))
 
-    index_rows: list[dict[str, Any]] = []
+    index_chunk_size = int(os.environ.get("REVIEW_HUB_INDEX_CHUNK_SIZE") or "5000")
+    index_chunk_size = max(500, min(index_chunk_size, 10000))
+
+    # dims
+    brands_set = set()
+    platforms_set = set()
+    products_set = set()
+
+    # aggregates
+    prod_count: dict[str, int] = {}
+    brand_sum: dict[str, float] = {}
+    brand_cnt: dict[str, int] = {}
+    rating_dist = [0, 0, 0, 0, 0]
+
+    index_chunks: dict[int, list[dict[str, Any]]] = {}
     body_chunks: dict[int, dict[str, dict[str, Any]]] = {}
 
     for i, obj in enumerate(out_rows):
         k = str(obj.get("dedup_key") or "")
-        chunk_id = i // body_chunk_size
+        body_chunk_id = i // body_chunk_size
+        index_chunk_id = i // index_chunk_size
 
-        # Index row: keep ONLY fields needed for filters/table/insights.
+        brand = str(obj.get("brand") or "")
+        platform = str(obj.get("platform") or "")
+        product = str(obj.get("product_name") or "")
+
+        if brand:
+            brands_set.add(brand)
+        if platform:
+            platforms_set.add(platform)
+        if product:
+            products_set.add(product)
+
+        # product counts
+        pk = product or "(unknown)"
+        prod_count[pk] = prod_count.get(pk, 0) + 1
+
+        # brand avg
+        rn = obj.get("rating_num")
+        try:
+            x = float(rn) if rn is not None and str(rn).strip() != "" else None
+        except Exception:
+            x = None
+        if x and x > 0:
+            bk = brand or "(unknown)"
+            brand_sum[bk] = brand_sum.get(bk, 0.0) + x
+            brand_cnt[bk] = brand_cnt.get(bk, 0) + 1
+            # dist (1..5)
+            rr = int(round(x))
+            rr = 1 if rr < 1 else (5 if rr > 5 else rr)
+            rating_dist[rr - 1] += 1
+
+        # index row
         idx = {
-            "dedup_key": obj.get("dedup_key") or "",
-            "brand": obj.get("brand") or "",
-            "platform": obj.get("platform") or "",
-            "product_name": obj.get("product_name") or "",
+            "dedup_key": k,
+            "brand": brand,
+            "platform": platform,
+            "product_name": product,
             "review_date_norm": obj.get("review_date_norm") or "",
             "rating_num": obj.get("rating_num"),
             "author": obj.get("author") or "",
             "body_len": obj.get("body_len"),
             "source_url": obj.get("source_url") or "",
-            "body_chunk": chunk_id,
+            "body_chunk": body_chunk_id,
         }
-        index_rows.append(idx)
+        index_chunks.setdefault(index_chunk_id, []).append(idx)
 
-        # Body chunk: store only what we need on expand.
+        # body chunk
         if k:
-            bc = body_chunks.setdefault(chunk_id, {})
+            bc = body_chunks.setdefault(body_chunk_id, {})
             bc[k] = {
                 "title": obj.get("title") or "",
                 "body": obj.get("body") or "",
@@ -175,49 +222,125 @@ def main() -> None:
     out_dir = os.path.join(WORKSPACE_ROOT, "data")
     os.makedirs(out_dir, exist_ok=True)
 
-    # Backward compatibility (some older deployments may still point here)
+    # Legacy (keep, but dashboard now prefers chunked index)
     legacy_path = os.path.join(out_dir, "reviews.json")
-    legacy_payload = {
+    with open(legacy_path, "w", encoding="utf-8") as f:
+        json.dump(
+            {
+                "generated_at": generated_at,
+                "sheet_id": sheet_id,
+                "count": len(out_rows),
+                "rows": out_rows,
+            },
+            f,
+            ensure_ascii=False,
+        )
+
+    # meta
+    meta = {
         "generated_at": generated_at,
         "sheet_id": sheet_id,
         "count": len(out_rows),
-        "rows": out_rows,
+        "dims": {
+            "brands": sorted(brands_set),
+            "platforms": sorted(platforms_set),
+            # Products can be large; keep it optional for UI (we can lazy-build in browser).
+            "products": [],
+        },
+        "index": {
+            "kind": "chunked",
+            "dir": "reviews_index",
+            "file_prefix": "chunk-",
+            "chunk_size": index_chunk_size,
+            "chunks": max(index_chunks.keys()) + 1 if index_chunks else 0,
+        },
+        "body": {
+            "dir": "reviews_body",
+            "file_prefix": "chunk-",
+            "chunk_size": body_chunk_size,
+            "chunks": max(body_chunks.keys()) + 1 if body_chunks else 0,
+        },
     }
-    with open(legacy_path, "w", encoding="utf-8") as f:
-        json.dump(legacy_payload, f, ensure_ascii=False)
 
-    index_payload = {
-        "generated_at": generated_at,
-        "sheet_id": sheet_id,
-        "count": len(index_rows),
-        "rows": index_rows,
-        "body_chunk_size": body_chunk_size,
-        "body_dir": "reviews_body",
-        "body_file_prefix": "chunk-",
-    }
+    meta_path = os.path.join(out_dir, "reviews_meta.json")
+    with open(meta_path, "w", encoding="utf-8") as f:
+        json.dump(meta, f, ensure_ascii=False)
 
-    index_path = os.path.join(out_dir, "reviews_index.json")
-    with open(index_path, "w", encoding="utf-8") as f:
-        json.dump(index_payload, f, ensure_ascii=False)
-
-    body_dir = os.path.join(out_dir, "reviews_body")
-    os.makedirs(body_dir, exist_ok=True)
-
-    for chunk_id, by_key in body_chunks.items():
-        p = os.path.join(body_dir, f"chunk-{chunk_id:03d}.json")
+    # index chunks
+    index_dir = os.path.join(out_dir, "reviews_index")
+    os.makedirs(index_dir, exist_ok=True)
+    for cid, rows_part in index_chunks.items():
+        p = os.path.join(index_dir, f"chunk-{cid:03d}.json")
         with open(p, "w", encoding="utf-8") as f:
             json.dump(
                 {
                     "generated_at": generated_at,
                     "sheet_id": sheet_id,
-                    "chunk": chunk_id,
+                    "chunk": cid,
+                    "rows": rows_part,
+                },
+                f,
+                ensure_ascii=False,
+            )
+
+    # body chunks
+    body_dir = os.path.join(out_dir, "reviews_body")
+    os.makedirs(body_dir, exist_ok=True)
+    for cid, by_key in body_chunks.items():
+        p = os.path.join(body_dir, f"chunk-{cid:03d}.json")
+        with open(p, "w", encoding="utf-8") as f:
+            json.dump(
+                {
+                    "generated_at": generated_at,
+                    "sheet_id": sheet_id,
+                    "chunk": cid,
                     "by_key": by_key,
                 },
                 f,
                 ensure_ascii=False,
             )
 
-    print(index_path)
+    # insights aggregates
+    top_prods = sorted(prod_count.items(), key=lambda x: x[1], reverse=True)[:15]
+    brand_avg = []
+    for b, cnt in brand_cnt.items():
+        if cnt >= 20:
+            brand_avg.append((b, brand_sum.get(b, 0.0) / cnt, cnt))
+    brand_avg.sort(key=lambda x: x[1], reverse=True)
+    brand_avg = brand_avg[:15]
+
+    insights_path = os.path.join(out_dir, "insights.json")
+    with open(insights_path, "w", encoding="utf-8") as f:
+        json.dump(
+            {
+                "generated_at": generated_at,
+                "sheet_id": sheet_id,
+                "count": len(out_rows),
+                "top_products": [{"name": n, "count": c} for n, c in top_prods],
+                "brand_avg": [{"name": n, "avg": round(a, 4), "count": c} for n, a, c in brand_avg],
+                "rating_dist": rating_dist,
+            },
+            f,
+            ensure_ascii=False,
+        )
+
+    # Back-compat index file (optional): keep a tiny pointer payload
+    index_path = os.path.join(out_dir, "reviews_index.json")
+    with open(index_path, "w", encoding="utf-8") as f:
+        json.dump(
+            {
+                "generated_at": generated_at,
+                "sheet_id": sheet_id,
+                "count": len(out_rows),
+                "rows": [],
+                "index": meta["index"],
+                "body": meta["body"],
+            },
+            f,
+            ensure_ascii=False,
+        )
+
+    print(meta_path)
 
 
 if __name__ == "__main__":

@@ -1,4 +1,4 @@
-const DATA_URL = "../data/reviews_index.json";
+const INSIGHTS_URL = "../data/insights.json";
 const LEGACY_URL = "../data/reviews.json";
 
 function byText(x){ return String(x ?? ""); }
@@ -164,74 +164,54 @@ function chartBar(el, labels, data, {label, color, horizontal=false, truncateTic
 }
 
 async function main(){
+  // Prefer precomputed insights (fast). Fallback to legacy heavy data.
   let payload;
   try {
-    const res = await fetch(DATA_URL, { cache: 'no-store' });
+    const res = await fetch(INSIGHTS_URL, { cache: 'no-store' });
     payload = await res.json();
   } catch (e) {
     const res2 = await fetch(LEGACY_URL, { cache: 'no-store' });
-    payload = await res2.json();
+    const legacy = await res2.json();
+    // compute minimal aggregates from legacy rows (slow fallback)
+    const rows = legacy.rows || [];
+    const st = computeStats(rows);
+    document.getElementById('statCount').textContent = st.n.toLocaleString();
+    document.getElementById('statAvg').textContent = st.avg ? st.avg.toFixed(2) : '-';
+    document.getElementById('statUpdated').textContent = legacy.generated_at ? legacy.generated_at.replace('T',' ').slice(0,19) : '-';
+    return;
   }
-  const rows = payload.rows || [];
 
-  const st = computeStats(rows);
-  document.getElementById('statCount').textContent = st.n.toLocaleString();
-  document.getElementById('statAvg').textContent = st.avg ? st.avg.toFixed(2) : '-';
+  document.getElementById('statCount').textContent = Number(payload.count || 0).toLocaleString();
+  // avg from brand_avg weighted (approx) isn't necessary; keep '-' for now.
+  // We can compute exact avg in export if needed.
+  document.getElementById('statAvg').textContent = '-';
   document.getElementById('statUpdated').textContent = payload.generated_at ? payload.generated_at.replace('T',' ').slice(0,19) : '-';
 
-  // Top products
-  const prodCount = new Map();
-  for(const r of rows){
-    const k = r.product_name || '(unknown)';
-    prodCount.set(k, (prodCount.get(k)||0)+1);
-  }
-  const topProds = Array.from(prodCount.entries()).sort((a,b)=>b[1]-a[1]).slice(0,15);
-  // Use a horizontal bar chart to avoid label overlap; truncate long names with ellipsis.
-  // Full names are shown in tooltip on hover.
+  // Top products (already aggregated)
+  const top = payload.top_products || [];
   chartBar(
     document.getElementById('cTopProducts'),
-    topProds.map(x=>x[0]),
-    topProds.map(x=>x[1]),
+    top.map(x=>x.name),
+    top.map(x=>x.count),
     {
       label:'리뷰 수',
       horizontal:true,
       truncateTicks:true,
-      // 요구사항: 그래프 호버가 아니라 "상품 이름"(y축 라벨) 쪽에 마우스 올리면
-      // 좌측에 툴팁으로 전체 이름 표시
       tooltipOnLabelHover:true,
     }
   );
 
-  // Brand avg rating (min 20)
-  const brandAgg = new Map();
-  for(const r of rows){
-    const b = r.brand || '(unknown)';
-    const x = ratingNum(r);
-    if(!x) continue;
-    const cur = brandAgg.get(b) || {sum:0,cnt:0};
-    cur.sum += x; cur.cnt += 1;
-    brandAgg.set(b, cur);
-  }
-  const brandAvg = Array.from(brandAgg.entries())
-    .filter(([_,v])=>v.cnt>=20)
-    .map(([k,v])=>[k, v.sum/v.cnt, v.cnt])
-    .sort((a,b)=>b[1]-a[1])
-    .slice(0,15);
+  // Brand avg
+  const bavg = payload.brand_avg || [];
   chartBar(
     document.getElementById('cBrandAvg'),
-    brandAvg.map(x=>`${x[0]} (${x[2]})`),
-    brandAvg.map(x=>Number(x[1].toFixed(2))),
+    bavg.map(x=>`${x.name} (${x.count})`),
+    bavg.map(x=>Number(Number(x.avg).toFixed(2))),
     {label:'평균 평점', color:'rgba(124,58,237,.65)'}
   );
 
-  // Rating distribution
-  const dist = [0,0,0,0,0];
-  for(const r of rows){
-    const x = ratingNum(r);
-    if(!x) continue;
-    const i = Math.min(5, Math.max(1, Math.round(x))) - 1;
-    dist[i] += 1;
-  }
+  // Rating dist
+  const dist = payload.rating_dist || [0,0,0,0,0];
   new Chart(document.getElementById('cRatingDist'), {
     type:'bar',
     data:{ labels:['1','2','3','4','5'], datasets:[{label:'건수', data:dist, backgroundColor:'rgba(2,132,199,.65)'}]},
