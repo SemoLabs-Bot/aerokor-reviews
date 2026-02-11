@@ -22,6 +22,7 @@ This script:
 
 Requires:
 - gog CLI authenticated (Sheets scope)
+- SMTP configured for email notifications (same style as meta flow)
 """
 
 from __future__ import annotations
@@ -48,6 +49,9 @@ DEFAULT_SHEET_ID = "1eSNPcGuOEdj4Lj-2tCQcdcFR-C1Z7sIS2ULbhezGtTo"
 DEFAULT_TAB_RAW = "올리_아임웹_주문원본"
 DEFAULT_TAB_PIVOT = "올리_아임웹_피벗집계"
 
+DEFAULT_EMAIL_TO = "realtiger@wekeepgrowing.com"
+DEFAULT_EMAIL_FROM = os.environ.get("IMWEB_EMAIL_FROM") or os.environ.get("GOG_ACCOUNT") or "semolabsbot@gmail.com"
+
 
 @dataclass
 class RunStats:
@@ -68,19 +72,40 @@ def sh(cmd: list[str], *, text=True) -> str:
 
 
 def pick_latest_xlsx(downloads_dir: Path, since_minutes: int, prefix: str = "기본_양식_") -> Path:
+    """Pick latest Imweb export XLSX from Downloads.
+
+    NOTE: macOS can produce filenames in decomposed Unicode (NFD), e.g.
+    '기본_양식_' instead of '기본_양식_'. We normalize to NFC for matching.
+    """
+
+    import unicodedata
+
     since_ts = datetime.now().timestamp() - since_minutes * 60
-    cand = []
-    for p in downloads_dir.glob(f"{prefix}*.xlsx"):
+    cand: list[tuple[float, Path]] = []
+
+    # Accept both 'prefix' and its NFD variant
+    prefix_nfc = unicodedata.normalize("NFC", prefix)
+    prefix_nfd = unicodedata.normalize("NFD", prefix)
+
+    for p in downloads_dir.glob("*.xlsx"):
         try:
             st = p.stat()
         except FileNotFoundError:
             continue
-        if st.st_mtime >= since_ts:
+        if st.st_mtime < since_ts:
+            continue
+
+        name_nfc = unicodedata.normalize("NFC", p.name)
+        name_nfd = unicodedata.normalize("NFD", p.name)
+
+        if name_nfc.startswith(prefix_nfc) or name_nfd.startswith(prefix_nfd):
             cand.append((st.st_mtime, p))
+
     if not cand:
         raise FileNotFoundError(
             f"No recent XLSX found in {downloads_dir} within last {since_minutes} minutes matching {prefix}*.xlsx"
         )
+
     cand.sort(reverse=True)
     return cand[0][1]
 
@@ -385,6 +410,49 @@ def sheets_update(sheet_id: str, tab: str, start_cell: str, rows: list[list], ac
     sh(args)
 
 
+def send_email(*, sheet_id: str, label: str, email_to: str, email_from: str) -> str:
+    """Send completion email (same address as meta flow by default)."""
+
+    sheet_url = f"https://docs.google.com/spreadsheets/d/{sheet_id}/edit"
+    subject = f"[아임웹 주문 리포트] {label} 업데이트 완료 (Google Sheets 링크)"
+    body = (
+        "안녕하세요.\n"
+        f"아임웹 주문 리포트({label}, KST) 기준으로 데이터 업데이트 완료된 구글 시트 링크 공유드립니다.\n\n"
+        f"- 문서 링크: {sheet_url}\n\n"
+        "확인 부탁드립니다.\n"
+        "감사합니다.\n"
+        "semolabsbot\n"
+    )
+
+    out_dir = Path("out") / "imweb-orders-run" / datetime.now().strftime("%Y%m%d-%H%M%S")
+    out_dir.mkdir(parents=True, exist_ok=True)
+    (out_dir / "email_subject.txt").write_text(subject, encoding="utf-8")
+    (out_dir / "email_body.txt").write_text(body, encoding="utf-8")
+
+    # Reuse the same SMTP helper script used by meta flow.
+    out = sh(
+        [
+            "node",
+            "skills/imap-smtp-email/scripts/smtp.js",
+            "send",
+            "--to",
+            email_to,
+            "--subject",
+            subject,
+            "--body-file",
+            str(out_dir / "email_body.txt"),
+            "--from",
+            email_from,
+        ]
+    )
+
+    try:
+        j = json.loads(out)
+        return j.get("messageId", "")
+    except Exception:
+        return out.strip()[:500]
+
+
 def chunked(seq: list[list], n: int):
     for i in range(0, len(seq), n):
         yield seq[i : i + n]
@@ -408,6 +476,11 @@ def main():
     ap.add_argument("--tab-raw", default=DEFAULT_TAB_RAW)
     ap.add_argument("--tab-pivot", default=DEFAULT_TAB_PIVOT)
     ap.add_argument("--account", default=os.environ.get("GOG_ACCOUNT"))
+
+    ap.add_argument("--email", action="store_true", help="Send completion email after updating Sheets")
+    ap.add_argument("--email-to", default=DEFAULT_EMAIL_TO)
+    ap.add_argument("--email-from", default=DEFAULT_EMAIL_FROM)
+    ap.add_argument("--email-label", default="", help="Optional label override in email subject")
 
     ap.add_argument("--pivot-mode", choices=["replace"], default="replace")
     ap.add_argument("--append-chunk", type=int, default=300)
@@ -511,6 +584,22 @@ def main():
     with open(log_path, "w", encoding="utf-8") as f:
         json.dump(stats.__dict__, f, ensure_ascii=False, indent=2)
 
+    email_message_id = ""
+    if args.email:
+        # Default label: single date or range if multiple dates.
+        label = args.email_label.strip()
+        if not label:
+            if distinct_dates:
+                label = distinct_dates[0] if len(distinct_dates) == 1 else f"{distinct_dates[0]}~{distinct_dates[-1]}"
+            else:
+                label = ts_kst
+        email_message_id = send_email(
+            sheet_id=args.sheet_id,
+            label=label,
+            email_to=args.email_to,
+            email_from=args.email_from,
+        )
+
     print(
         json.dumps(
             {
@@ -524,9 +613,12 @@ def main():
                     "pending": stats.rows_pending_dropped,
                 },
                 "pivot_rows": stats.pivot_rows,
+                "pivot_include_order_date": include_date,
+                "distinct_dates": distinct_dates,
                 "sheet": args.sheet_id,
                 "tab_raw": args.tab_raw,
                 "tab_pivot": args.tab_pivot,
+                "email_message_id": email_message_id,
                 "log": str(log_path),
             },
             ensure_ascii=False,
