@@ -705,6 +705,9 @@ async function main() {
   initReviewModal();
   initTable();
   initSidebarToggle();
+  initNotifUI();
+  // Notifications feed load (doesn't block UI)
+  loadUpdates();
 
   // Load first chunk quickly for TTI
   const first = await fetchIndexChunk(0);
