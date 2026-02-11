@@ -44,6 +44,52 @@ body{
 button.ghost{padding:8px 12px; border-radius:12px; border:1px solid var(--border); background:rgba(255,255,255,.92); font-weight:800; box-shadow:var(--shadow-sm)}
 button.ghost:hover{transform:translateY(-1px)}
 
+/* Notifications */
+.notif{position:relative}
+.notif-btn{padding:8px 10px}
+.notif-icon{font-size:14px; line-height:1}
+.notif-dot{
+  position:absolute;
+  top:6px;
+  right:6px;
+  width:9px;
+  height:9px;
+  border-radius:999px;
+  background:#ef4444;
+  border:2px solid rgba(255,255,255,.95);
+  display:none;
+}
+.notif-dot.on{display:block}
+
+.notif-panel{
+  position:absolute;
+  top:44px;
+  right:0;
+  width:min(420px, calc(100vw - 24px));
+  background:#fff;
+  border:1px solid rgba(15,23,42,.14);
+  border-radius:14px;
+  box-shadow:0 24px 60px rgba(2,6,23,.22);
+  padding:10px;
+  display:none;
+  z-index:80;
+}
+.notif-panel.open{display:block}
+.notif-head{display:flex; align-items:center; justify-content:space-between; gap:10px; padding:6px 6px 10px; border-bottom:1px solid rgba(15,23,42,.10)}
+.notif-title{font-weight:900}
+.notif-actions{display:flex; gap:6px}
+button.mini{height:30px; padding:6px 10px; border-radius:10px; font-size:12px; font-weight:800}
+button.mini.danger{border-color:rgba(239,68,68,.35); color:rgba(185,28,28,.98); background:rgba(239,68,68,.06)}
+
+.notif-list{max-height:420px; overflow:auto; padding:8px 4px}
+.notif-item{display:flex; align-items:flex-start; justify-content:space-between; gap:10px; padding:10px; border-radius:12px; border:1px solid rgba(15,23,42,.10); background:rgba(248,250,252,.92); margin-bottom:8px; cursor:pointer}
+.notif-item.unread{border-color:rgba(239,68,68,.28); background:rgba(254,242,242,.72)}
+.notif-item .msg{font-weight:900; font-size:13px}
+.notif-item .meta{font-size:11px; color:var(--muted); margin-top:4px}
+.notif-item .x{flex:0 0 auto}
+.notif-item .x button{height:28px; width:28px; padding:0; border-radius:10px; font-weight:900; background:#fff}
+
+
 /* Match height between the topbar toggle button and the insights link */
 .top-actions button.ghost,
 .top-actions .ghost-link{

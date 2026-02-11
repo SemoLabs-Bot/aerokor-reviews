@@ -15,6 +15,24 @@
       <div class="sub">제품별 리뷰 현황 대시보드 (Sheet: <span id="sheetId"></span>)</div>
       <div class="top-actions">
         <button id="toggleSidebar" class="ghost" type="button" title="좌측 메뉴(필터/빠른 보기) 열기/닫기">⟨ 좌측 메뉴 닫기</button>
+
+        <div class="notif">
+          <button id="notifBtn" class="ghost notif-btn" type="button" aria-label="알림" title="알림">
+            <span class="notif-icon">🔔</span>
+            <span id="notifDot" class="notif-dot" aria-hidden="true"></span>
+          </button>
+          <div id="notifPanel" class="notif-panel" aria-hidden="true">
+            <div class="notif-head">
+              <div class="notif-title">알림</div>
+              <div class="notif-actions">
+                <button id="notifMarkAllRead" class="mini" type="button">모두 읽음</button>
+                <button id="notifClearAll" class="mini danger" type="button">모두 삭제</button>
+              </div>
+            </div>
+            <div id="notifList" class="notif-list"></div>
+          </div>
+        </div>
+
         <a class="ghost-link" href="./insights.html">지표 | 그래프</a>
       </div>
     </div>
@@ -130,6 +148,16 @@
       <div id="reviewModalTitle" class="review-modal-title">리뷰 상세</div>
       <div id="reviewModalMeta" class="review-modal-meta"></div>
       <pre id="reviewModalBody" class="review-modal-body">-</pre>
+    </div>
+  </div>
+
+  <div id="notifModal" class="review-modal" aria-hidden="true">
+    <div class="review-modal-backdrop" data-close="1"></div>
+    <div class="review-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="notifModalTitle">
+      <button id="notifModalClose" class="review-modal-close" type="button" aria-label="닫기">✕</button>
+      <div id="notifModalTitle" class="review-modal-title">2점 이하 리뷰</div>
+      <div id="notifModalMeta" class="review-modal-meta"></div>
+      <div id="notifModalList" style="overflow:auto; max-height:calc(100vh - 260px)"></div>
     </div>
   </div>
 

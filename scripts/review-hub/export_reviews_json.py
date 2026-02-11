@@ -4,7 +4,7 @@ from __future__ import annotations
 import json
 import os
 import subprocess
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 from typing import Any
 
 WORKSPACE_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
@@ -312,9 +312,9 @@ def main() -> None:
 
     # Daily counters
     try:
-        kst = dt.timezone(dt.timedelta(hours=9))
-        now_kst = dt.datetime.now(tz=kst)
-        yesterday = (now_kst - dt.timedelta(days=1)).date().isoformat()
+        kst = timezone(timedelta(hours=9))
+        now_kst = datetime.now(tz=kst)
+        yesterday = (now_kst - timedelta(days=1)).date().isoformat()
         today = now_kst.date().isoformat()
     except Exception:
         yesterday = ""
@@ -357,6 +357,62 @@ def main() -> None:
             f,
             ensure_ascii=False,
         )
+
+    # --- Notifications feed (server-side; accumulates per publish) ---
+    # For each export run, we record a notification if there are any low-rating (<=2) reviews
+    # collected today. The UI will keep unread state per user in localStorage.
+    low_reviews = []
+    low_count = 0
+    for r in out_rows:
+        try:
+            if today and str(r.get("collected_date") or "") != today:
+                continue
+            x = r.get("rating_num")
+            x = float(x) if x is not None and str(x).strip() != "" else None
+            if x is None or x > 2:
+                continue
+            low_count += 1
+            low_reviews.append({
+                "dedup_key": r.get("dedup_key") or "",
+                "brand": r.get("brand") or "",
+                "platform": r.get("platform") or "",
+                "product_name": r.get("product_name") or "",
+                "review_date_norm": r.get("review_date_norm") or "",
+                "rating_num": x,
+                "author": r.get("author") or "",
+                "body_len": r.get("body_len"),
+                "body_chunk": r.get("body_chunk"),
+                "source_url": r.get("source_url") or "",
+            })
+        except Exception:
+            continue
+
+    updates_path = os.path.join(out_dir, "updates.json")
+    try:
+        existing = json.load(open(updates_path, "r", encoding="utf-8"))
+        if not isinstance(existing, list):
+            existing = []
+    except Exception:
+        existing = []
+
+    # Create a stable id per run.
+    update_id = f"{generated_at}"
+    entry = {
+        "id": update_id,
+        "generated_at": generated_at,
+        "today": today,
+        "low_rating_threshold": 2,
+        "low_rating_count": int(low_count),
+        "message": f"2점 이하 리뷰 {int(low_count)}건 추가" if low_count else "업데이트",
+        "low_reviews": low_reviews[:200],  # cap
+    }
+
+    # Prepend if new.
+    if not existing or str(existing[0].get("id")) != update_id:
+        existing.insert(0, entry)
+        existing = existing[:60]
+        with open(updates_path, "w", encoding="utf-8") as f:
+            json.dump(existing, f, ensure_ascii=False)
 
     # Back-compat index file (optional): keep a tiny pointer payload
     index_path = os.path.join(out_dir, "reviews_index.json")

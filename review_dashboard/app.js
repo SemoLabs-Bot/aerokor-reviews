@@ -22,6 +22,12 @@ let table;
 let TABLE_BUILT = false;
 let PENDING_DATA = null;
 
+// Notifications
+const UPDATES_URL = "../data/updates.json";
+let UPDATES = [];
+const LS_READ = "reviewHub.updates.readIds";
+const LS_DELETED = "reviewHub.updates.deletedIds";
+
 let reviewModalEl = null;
 let reviewModalBodyEl = null;
 let reviewModalMetaEl = null;
@@ -402,9 +408,6 @@ function initSidebarToggle() {
   const key = "reviewHub.sidebarCollapsed";
   const apply = (collapsed) => {
     document.body.classList.toggle("sidebar-collapsed", !!collapsed);
-    // Copy for the button label:
-    // - open (sidebar visible): show "close left menu" with a left chevron
-    // - collapsed (sidebar hidden): show "open left menu" with a hamburger icon
     btn.textContent = collapsed ? "☰ 좌측 메뉴 열기" : "⟨ 좌측 메뉴 닫기";
     try { if (table) table.redraw(true); } catch (e) {}
   };
@@ -418,6 +421,234 @@ function initSidebarToggle() {
     apply(next);
   };
 }
+
+function lsGetSet(key){
+  try{
+    const v = JSON.parse(localStorage.getItem(key) || "[]");
+    return new Set(Array.isArray(v) ? v : []);
+  }catch(e){
+    return new Set();
+  }
+}
+
+function lsSetFromSet(key, set){
+  localStorage.setItem(key, JSON.stringify(Array.from(set)));
+}
+
+function renderNotifDot(){
+  const dot = document.getElementById('notifDot');
+  if(!dot) return;
+  const read = lsGetSet(LS_READ);
+  const deleted = lsGetSet(LS_DELETED);
+  const unread = (UPDATES || []).some(u => !deleted.has(String(u.id)) && !read.has(String(u.id)));
+  dot.classList.toggle('on', unread);
+}
+
+function openNotifPanel(open){
+  const panel = document.getElementById('notifPanel');
+  if(!panel) return;
+  panel.classList.toggle('open', !!open);
+  panel.setAttribute('aria-hidden', open ? 'false' : 'true');
+}
+
+function renderNotifList(){
+  const list = document.getElementById('notifList');
+  if(!list) return;
+
+  const read = lsGetSet(LS_READ);
+  const deleted = lsGetSet(LS_DELETED);
+
+  const items = (UPDATES || []).filter(u => !deleted.has(String(u.id)));
+  if(!items.length){
+    list.innerHTML = `<div style="color:rgba(71,85,105,.95); font-size:12px; padding:10px">알림이 없습니다.</div>`;
+    renderNotifDot();
+    return;
+  }
+
+  list.innerHTML = '';
+  for(const u of items){
+    const id = String(u.id);
+    const el = document.createElement('div');
+    el.className = 'notif-item' + (read.has(id) ? '' : ' unread');
+
+    const left = document.createElement('div');
+    const msg = document.createElement('div');
+    msg.className = 'msg';
+    msg.textContent = u.message || '업데이트';
+    const meta = document.createElement('div');
+    meta.className = 'meta';
+    const ts = String(u.generated_at || '').replace('T',' ').slice(0,19);
+    meta.textContent = ts;
+    left.appendChild(msg);
+    left.appendChild(meta);
+
+    const right = document.createElement('div');
+    right.className = 'x';
+    const xb = document.createElement('button');
+    xb.type = 'button';
+    xb.textContent = '✕';
+    xb.title = '삭제';
+    xb.onclick = (ev) => {
+      ev.stopPropagation();
+      const del = lsGetSet(LS_DELETED);
+      del.add(id);
+      lsSetFromSet(LS_DELETED, del);
+      renderNotifList();
+    };
+    right.appendChild(xb);
+
+    el.appendChild(left);
+    el.appendChild(right);
+
+    el.onclick = () => {
+      // mark read
+      const r = lsGetSet(LS_READ);
+      r.add(id);
+      lsSetFromSet(LS_READ, r);
+      renderNotifDot();
+      renderNotifList();
+      openNotifPanel(false);
+      openLowRatingModal(u);
+    };
+
+    list.appendChild(el);
+  }
+
+  renderNotifDot();
+}
+
+function openLowRatingModal(update){
+  const modal = document.getElementById('notifModal');
+  if(!modal) return;
+  const meta = document.getElementById('notifModalMeta');
+  const list = document.getElementById('notifModalList');
+  const title = document.getElementById('notifModalTitle');
+
+  const n = Number(update.low_rating_count || 0);
+  title.textContent = `2점 이하 리뷰 (${n}건)`;
+  meta.textContent = `${String(update.generated_at||'').replace('T',' ').slice(0,19)} · 기준: ≤${update.low_rating_threshold||2}점`;
+
+  const rows = update.low_reviews || [];
+  if(!rows.length){
+    list.innerHTML = `<div style="color:rgba(71,85,105,.95); font-size:12px; padding:6px 2px">해당 업데이트에서 2점 이하 리뷰가 없습니다.</div>`;
+  }else{
+    const wrap = document.createElement('div');
+    wrap.style.display='flex';
+    wrap.style.flexDirection='column';
+    wrap.style.gap='8px';
+
+    for(const r of rows){
+      const card = document.createElement('div');
+      card.style.border='1px solid rgba(15,23,42,.12)';
+      card.style.borderRadius='12px';
+      card.style.padding='10px';
+      card.style.background='rgba(248,250,252,.92)';
+      card.style.cursor='pointer';
+
+      const h = document.createElement('div');
+      h.style.fontWeight='900';
+      h.style.fontSize='13px';
+      h.textContent = `[${r.brand||''}/${r.platform||''}] ${r.product_name||''} · ${r.rating_num}점`;
+
+      const m = document.createElement('div');
+      m.style.fontSize='11px';
+      m.style.color='rgba(71,85,105,.95)';
+      m.style.marginTop='4px';
+      m.textContent = `${r.review_date_norm||''} · ${r.author||''}`;
+
+      card.appendChild(h);
+      card.appendChild(m);
+
+      card.onclick = async () => {
+        // Reuse the main review modal to show body (lazy loaded)
+        try {
+          await loadBodyForRow(r);
+        } catch(e) {}
+        openReviewModal({
+          title: `${r.product_name||''} (${r.rating_num}점)`,
+          meta: `brand=${r.brand||''} · platform=${r.platform||''} · author=${r.author||''} · date=${r.review_date_norm||''}`,
+          body: mergedBody(r),
+        });
+      };
+
+      wrap.appendChild(card);
+    }
+    list.innerHTML='';
+    list.appendChild(wrap);
+  }
+
+  modal.classList.add('open');
+  modal.setAttribute('aria-hidden','false');
+}
+
+function initNotifUI(){
+  const btn = document.getElementById('notifBtn');
+  const panel = document.getElementById('notifPanel');
+  if(!btn || !panel) return;
+
+  btn.onclick = () => {
+    const open = !panel.classList.contains('open');
+    openNotifPanel(open);
+  };
+
+  document.addEventListener('click', (ev) => {
+    const t = ev.target;
+    if(panel.contains(t) || btn.contains(t)) return;
+    openNotifPanel(false);
+  });
+
+  const markAll = document.getElementById('notifMarkAllRead');
+  if(markAll){
+    markAll.onclick = () => {
+      const r = lsGetSet(LS_READ);
+      const del = lsGetSet(LS_DELETED);
+      for(const u of (UPDATES||[])){
+        const id = String(u.id);
+        if(!del.has(id)) r.add(id);
+      }
+      lsSetFromSet(LS_READ, r);
+      renderNotifList();
+    };
+  }
+
+  const clearAll = document.getElementById('notifClearAll');
+  if(clearAll){
+    clearAll.onclick = () => {
+      const del = lsGetSet(LS_DELETED);
+      for(const u of (UPDATES||[])) del.add(String(u.id));
+      lsSetFromSet(LS_DELETED, del);
+      renderNotifList();
+    };
+  }
+
+  const close = document.getElementById('notifModalClose');
+  const modal = document.getElementById('notifModal');
+  if(close && modal){
+    close.onclick = () => {
+      modal.classList.remove('open');
+      modal.setAttribute('aria-hidden','true');
+    };
+    modal.addEventListener('click', (ev)=>{
+      const t=ev.target;
+      if(t && t.getAttribute && t.getAttribute('data-close')==='1'){
+        modal.classList.remove('open');
+        modal.setAttribute('aria-hidden','true');
+      }
+    });
+  }
+}
+
+async function loadUpdates(){
+  try{
+    const res = await fetch(UPDATES_URL, { cache: 'no-store' });
+    UPDATES = await res.json();
+    if(!Array.isArray(UPDATES)) UPDATES = [];
+  }catch(e){
+    UPDATES = [];
+  }
+  renderNotifList();
+}
+
 
 async function main() {
   // Load meta first (small), then progressively load index chunks.
