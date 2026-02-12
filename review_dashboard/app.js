@@ -33,6 +33,15 @@ let reviewModalBodyEl = null;
 let reviewModalMetaEl = null;
 let reviewModalRequestToken = 0;
 
+
+function initLucideIcons() {
+  try {
+    if (window.lucide && typeof window.lucide.createIcons === "function") {
+      window.lucide.createIcons();
+    }
+  } catch (e) {}
+}
+
 function closeReviewModal() {
   reviewModalRequestToken += 1;
   if (!reviewModalEl) return;
@@ -342,7 +351,7 @@ function initTable() {
   };
 
   table = new Tabulator("#table", {
-    height: "calc(100vh - 210px)",
+    height: "100%",
     layout: "fitColumns",
     renderVertical: "virtual",
     index: "dedup_key",
@@ -517,6 +526,43 @@ function renderNotifList(){
   renderNotifDot();
 }
 
+function closeLowRatingModal() {
+  const modal = document.getElementById("notifModal");
+  if (!modal) return;
+  modal.classList.remove("open");
+  modal.setAttribute("aria-hidden", "true");
+}
+
+function resolveReviewFromUpdateRow(r) {
+  const row = { ...r };
+  let found = null;
+
+  if (row.dedup_key) {
+    found = ALL.find((x) => String(x.dedup_key || "") === String(row.dedup_key));
+  }
+
+  if (!found) {
+    found = ALL.find((x) => (
+      String(x.product_name || "") === String(row.product_name || "") &&
+      String(x.author || "") === String(row.author || "") &&
+      String(x.review_date_norm || "") === String(row.review_date_norm || "")
+    ));
+  }
+
+  if (found) {
+    if (!row.dedup_key) row.dedup_key = found.dedup_key;
+    if (!row.body_chunk && Number.isFinite(Number(found.body_chunk))) row.body_chunk = found.body_chunk;
+    if (!row.review_date_norm) row.review_date_norm = found.review_date_norm;
+    if (!row.author) row.author = found.author;
+    if (!row.product_name) row.product_name = found.product_name;
+    if (!row.rating_num) row.rating_num = found.rating_num;
+    if (!row.title) row.title = found.title || "";
+    if (!row.body) row.body = found.body || "";
+  }
+
+  return row;
+}
+
 function openLowRatingModal(update){
   const modal = document.getElementById('notifModal');
   if(!modal) return;
@@ -560,15 +606,28 @@ function openLowRatingModal(update){
       card.appendChild(m);
 
       card.onclick = async () => {
-        // Reuse the main review modal to show body (lazy loaded)
+        const target = resolveReviewFromUpdateRow(r);
+        closeLowRatingModal();
+
+        const requestToken = ++reviewModalRequestToken;
+        openReviewModal(target, "불러오는 중…");
+
         try {
-          await loadBodyForRow(r);
-        } catch(e) {}
-        openReviewModal({
-          title: `${r.product_name||''} (${r.rating_num}점)`,
-          meta: `brand=${r.brand||''} · platform=${r.platform||''} · author=${r.author||''} · date=${r.review_date_norm||''}`,
-          body: mergedBody(r),
-        });
+          await loadBodyForRow(target);
+          if (requestToken !== reviewModalRequestToken) return;
+          const bodyText = mergedBody(target);
+          if (bodyText) {
+            openReviewModal(target, bodyText);
+          } else {
+            const fallback = target.source_url
+              ? `리뷰 본문 데이터가 아직 동기화되지 않았어요.\n원문 링크에서 확인해주세요:\n${target.source_url}`
+              : "리뷰 본문 데이터가 아직 동기화되지 않았어요.";
+            openReviewModal(target, fallback);
+          }
+        } catch (e) {
+          if (requestToken !== reviewModalRequestToken) return;
+          openReviewModal(target, "본문을 불러오지 못했어요.");
+        }
       };
 
       wrap.appendChild(card);
@@ -624,15 +683,11 @@ function initNotifUI(){
   const close = document.getElementById('notifModalClose');
   const modal = document.getElementById('notifModal');
   if(close && modal){
-    close.onclick = () => {
-      modal.classList.remove('open');
-      modal.setAttribute('aria-hidden','true');
-    };
+    close.onclick = closeLowRatingModal;
     modal.addEventListener('click', (ev)=>{
       const t=ev.target;
       if(t && t.getAttribute && t.getAttribute('data-close')==='1'){
-        modal.classList.remove('open');
-        modal.setAttribute('aria-hidden','true');
+        closeLowRatingModal();
       }
     });
   }
@@ -673,6 +728,7 @@ async function main() {
     setOptions(document.getElementById("platform"), platforms);
     setOptions(document.getElementById("product"), products);
 
+    initLucideIcons();
     initReviewModal();
     initTable();
     initSidebarToggle();
@@ -702,6 +758,7 @@ async function main() {
   // Products list is intentionally not preloaded (can be huge). We'll build it on demand.
   setOptions(document.getElementById("product"), [], { withAll: true });
 
+  initLucideIcons();
   initReviewModal();
   initTable();
   initSidebarToggle();
