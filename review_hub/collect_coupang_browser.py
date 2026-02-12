@@ -391,32 +391,70 @@ def _dedup_key_for_review(*, product_url: str, author: str, review_date: str, bo
 
 
 def _ensure_review_section_and_sort(b: OpenClawBrowser, *, order: str):
-    # Click a link/button that navigates to review section
-    b.evaluate(
+    """Ensure the page is at the review section.
+
+    Coupang PDPs often have a visible tab/button labeled "상품평" that reveals the
+    review section. In some variants there is also an anchor link to #sdpReview.
+    This function clicks whichever is available and scrolls into view.
+    """
+
+    r = b.evaluate(
         "() => {\n"
+        "  const norm = (s) => (s || '').replace(/\\s+/g,' ').trim();\n"
+        "  const isVisible = (el) => {\n"
+        "    if (!el) return false;\n"
+        "    const r = el.getBoundingClientRect();\n"
+        "    return r.width > 0 && r.height > 0;\n"
+        "  };\n"
+        "\n"
+        "  // 1) Try direct anchor\n"
         "  const a = document.querySelector('a[href=\\"#sdpReview\\"], a[href*=\\"#sdpReview\\"]');\n"
-        "  if (a) a.click();\n"
+        "  if (a && isVisible(a)) { try { a.click(); } catch(e) {} }\n"
+        "\n"
+        "  // 2) Try tab/button with text '상품평'\n"
+        "  const cand = Array.from(document.querySelectorAll('a,button,li,div,span'))\n"
+        "    .filter(el => isVisible(el))\n"
+        "    .find(el => {\n"
+        "      const t = norm(el.innerText);\n"
+        "      return t === '상품평' || t.startsWith('상품평 ');\n"
+        "    });\n"
+        "  if (cand) { try { cand.click(); } catch(e) {} }\n"
+        "\n"
+        "  // 3) Scroll to review root if present\n"
         "  const root = document.querySelector('#sdpReview');\n"
-        "  if (root) root.scrollIntoView();\n"
-        "  return {clicked: !!a, hasRoot: !!root};\n"
+        "  if (root) root.scrollIntoView({block: 'start'});\n"
+        "\n"
+        "  return {clickedAnchor: !!(a && isVisible(a)), clickedTab: !!cand, hasRoot: !!root};\n"
         "}",
         timeout_s=25,
     )
+    # Minimal debug signal (stdout)
+    try:
+        print(f"[coupang] ensure_review_section: {r}")
+    except Exception:
+        pass
+
     # Wait a bit for lazy rendering
-    b.wait_ms(1200)
+    b.wait_ms(1500)
 
     if order == "latest":
         # Best-effort click '최신순'
-        b.evaluate(
+        rr = b.evaluate(
             "() => {\n"
-            "  const btn = Array.from(document.querySelectorAll('#sdpReview button, #sdpReview a'))\n"
+            "  const root = document.querySelector('#sdpReview');\n"
+            "  if (!root) return {clicked:false, reason:'no_root'};\n"
+            "  const btn = Array.from(root.querySelectorAll('button, a'))\n"
             "    .find(x => (x.innerText || '').trim() === '최신순');\n"
-            "  if (btn) btn.click();\n"
+            "  if (btn) { try { btn.click(); } catch(e) {} }\n"
             "  return {clicked: !!btn};\n"
             "}",
             timeout_s=25,
         )
-        b.wait_ms(800)
+        try:
+            print(f"[coupang] sort_latest: {rr}")
+        except Exception:
+            pass
+        b.wait_ms(900)
 
 
 def _extract_reviews_visible(b: OpenClawBrowser) -> List[Dict[str, Any]]:
@@ -563,8 +601,11 @@ def collect_reviews_for_product(
         # ensure review root exists
         try:
             b.wait_for_selector("#sdpReview", timeout_ms=15000)
-        except Exception:
-            pass
+        except Exception as e:
+            try:
+                print(f"[coupang] wait_for #sdpReview failed: {e}")
+            except Exception:
+                pass
 
         # extract visible
         reviews = _extract_reviews_visible(b)
@@ -613,6 +654,10 @@ def collect_reviews_for_product(
 
         if page >= 1 and new_in_page == 0:
             stats["stopped_early_seen"] += 1
+            try:
+                print(f"[coupang] no new reviews on page={page}; stop early")
+            except Exception:
+                pass
             break
 
         page += 1

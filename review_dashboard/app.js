@@ -572,7 +572,10 @@ function openLowRatingModal(update){
 
   const n = Number(update.low_rating_count || 0);
   title.textContent = `2점 이하 리뷰 (${n}건)`;
-  meta.textContent = `${String(update.generated_at||'').replace('T',' ').slice(0,19)} · 기준: ≤${update.low_rating_threshold||2}점`;
+  const ts = String(update.generated_at||'').replace('T',' ').slice(0,19);
+  const newN = (update.new_reviews_count == null) ? null : Number(update.new_reviews_count || 0);
+  const newPart = (newN == null) ? '' : ` · 신규 리뷰 ${newN}건`;
+  meta.textContent = `${ts}${newPart} · 기준: ≤${update.low_rating_threshold||2}점`;
 
   const rows = update.low_reviews || [];
   if(!rows.length){

@@ -65,6 +65,16 @@ def main() -> None:
     account = sink["account"]
     sheet_id = sink["sheetId"]
 
+    # Previous total count (to compute "new reviews in this update")
+    prev_count = None
+    try:
+        meta_path_prev = os.path.join(WORKSPACE_ROOT, "data", "reviews_meta.json")
+        if os.path.exists(meta_path_prev):
+            prev = json.load(open(meta_path_prev, "r", encoding="utf-8"))
+            prev_count = to_int(prev.get("count"))
+    except Exception:
+        prev_count = None
+
     # Pull looker_reviews in pages to avoid the old hard cap (R5000).
     # Sheets will return only populated values within the requested range.
     # Prefer large pages to reduce Google API read quota usage.
@@ -134,6 +144,13 @@ def main() -> None:
         raise SystemExit("No data returned from looker_reviews")
 
     generated_at = datetime.now().astimezone().isoformat()
+    total_count = len(out_rows)
+    new_reviews_count = None
+    try:
+        if prev_count is not None:
+            new_reviews_count = max(0, int(total_count) - int(prev_count))
+    except Exception:
+        new_reviews_count = None
     # --- Output (optimized for dashboard load) ---
     # We split data into:
     # 1) reviews_meta.json: small metadata + dimensions for filters
@@ -230,7 +247,7 @@ def main() -> None:
             {
                 "generated_at": generated_at,
                 "sheet_id": sheet_id,
-                "count": len(out_rows),
+                "count": total_count,
                 "rows": out_rows,
             },
             f,
@@ -241,7 +258,9 @@ def main() -> None:
     meta = {
         "generated_at": generated_at,
         "sheet_id": sheet_id,
-        "count": len(out_rows),
+        "count": total_count,
+        "prev_count": prev_count,
+        "new_reviews_count": new_reviews_count,
         "dims": {
             "brands": sorted(brands_set),
             "platforms": sorted(platforms_set),
@@ -344,7 +363,8 @@ def main() -> None:
             {
                 "generated_at": generated_at,
                 "sheet_id": sheet_id,
-                "count": len(out_rows),
+                "count": total_count,
+                "new_reviews_count": new_reviews_count,
                 "avg_rating": round(avg_rating, 4) if avg_rating is not None else None,
                 "yesterday": yesterday,
                 "yesterday_review_count": yesterday_review_count,
@@ -397,13 +417,20 @@ def main() -> None:
 
     # Create a stable id per run.
     update_id = f"{generated_at}"
+    # Notification entry (used by dashboard notifications UI)
+    msg_new = ""
+    if new_reviews_count is not None:
+        msg_new = f" (신규 리뷰 {int(new_reviews_count)}건)"
+
     entry = {
         "id": update_id,
         "generated_at": generated_at,
         "today": today,
+        "count_total": total_count,
+        "new_reviews_count": new_reviews_count,
         "low_rating_threshold": 2,
         "low_rating_count": int(low_count),
-        "message": f"2점 이하 리뷰 {int(low_count)}건 추가" if low_count else "업데이트",
+        "message": (f"2점 이하 리뷰 {int(low_count)}건 추가" + msg_new) if low_count else ("업데이트" + msg_new),
         "low_reviews": low_reviews[:200],  # cap
     }
 
@@ -421,7 +448,7 @@ def main() -> None:
             {
                 "generated_at": generated_at,
                 "sheet_id": sheet_id,
-                "count": len(out_rows),
+                "count": total_count,
                 "rows": [],
                 "index": meta["index"],
                 "body": meta["body"],
