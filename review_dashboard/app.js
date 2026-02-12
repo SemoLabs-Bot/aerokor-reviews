@@ -645,6 +645,12 @@ function initNotifUI(){
   const panel = document.getElementById('notifPanel');
   if(!btn || !panel) return;
 
+  // Keep the notification panel outside sticky/filtered header layers,
+  // so fixed centering is stable and never clipped by parent stacking contexts.
+  if (panel.parentElement !== document.body) {
+    document.body.appendChild(panel);
+  }
+
   btn.onclick = () => {
     const open = !panel.classList.contains('open');
     openNotifPanel(open);
