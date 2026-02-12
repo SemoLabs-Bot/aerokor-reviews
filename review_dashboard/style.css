@@ -134,7 +134,10 @@ button.mini.danger{border-color:rgba(239,68,68,.35); color:rgba(185,28,28,.98); 
   box-shadow:0 10px 22px rgba(37,99,235,.08);
 }
 .top-action-btn:hover,
-.top-action-link:hover{
+.top-action-link:hover,
+.top-action-btn:active,
+.top-action-link:active{
+  transform:none !important;
   border-color:rgba(37,99,235,.38) !important;
   box-shadow:0 14px 26px rgba(37,99,235,.13);
 }
