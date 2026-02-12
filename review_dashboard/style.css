@@ -89,6 +89,10 @@ button.ghost:hover{transform:translateY(-1px)}
   display:none;
   z-index:80;
 }
+.stats-notif .notif-panel{
+  left:0;
+  right:auto;
+}
 .notif-panel.open{display:block}
 .top-actions-notif .notif-panel{right:0; left:auto}
 .notif-head{display:flex; align-items:center; justify-content:space-between; gap:10px; padding:6px 6px 10px; border-bottom:1px solid rgba(15,23,42,.10)}
@@ -137,6 +141,15 @@ button.mini.danger{border-color:rgba(239,68,68,.35); color:rgba(185,28,28,.98); 
 }
 
 .stats{display:flex; gap:10px; flex-wrap:wrap; justify-content:flex-end}
+.stats-notif{
+  display:flex;
+  align-items:center;
+}
+.stats-notif .notif-btn{
+  min-width:44px;
+  height:48px;
+  border-radius:14px;
+}
 .stat{
   min-width:140px;
   background:linear-gradient(155deg, rgba(255,255,255,.98), rgba(243,246,255,.96));
