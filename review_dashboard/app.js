@@ -351,7 +351,7 @@ function initTable() {
   };
 
   table = new Tabulator("#table", {
-    height: "calc(100vh - 210px)",
+    height: "100%",
     layout: "fitColumns",
     renderVertical: "virtual",
     index: "dedup_key",
