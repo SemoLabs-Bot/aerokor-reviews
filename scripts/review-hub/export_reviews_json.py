@@ -380,12 +380,16 @@ def main() -> None:
 
     # --- Notifications feed (server-side; accumulates per publish) ---
     # For each export run, we record a notification if there are any low-rating (<=2) reviews
-    # collected today. The UI will keep unread state per user in localStorage.
+    # for the *target day*.
+    #
+    # IMPORTANT: We alert by review_date_norm ("when the review was written"), not collected_date.
+    # Otherwise, re-collecting/backfilling old content would generate noisy "new" alerts.
     low_reviews = []
     low_count = 0
+    target_day = yesterday  # default: yesterday's reviews
     for r in out_rows:
         try:
-            if today and str(r.get("collected_date") or "") != today:
+            if target_day and str(r.get("review_date_norm") or "")[:10] != str(target_day):
                 continue
             x = r.get("rating_num")
             x = float(x) if x is not None and str(x).strip() != "" else None
