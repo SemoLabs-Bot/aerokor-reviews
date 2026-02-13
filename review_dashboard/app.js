@@ -26,6 +26,9 @@ let table;
 let TABLE_BUILT = false;
 let PENDING_DATA = null;
 
+// Meta total count (full dataset). Use this to avoid showing "5000" while only the first chunk is loaded.
+let META_TOTAL_COUNT = 0;
+
 // Notifications
 const UPDATES_URL = "../data/updates.json";
 let UPDATES = [];
@@ -218,7 +221,13 @@ function applyFilters() {
   }
 
   const st = computeStats(filtered);
-  document.getElementById("statCount").textContent = st.n.toLocaleString();
+
+  // Avoid showing the first chunk size (e.g., 5,000) as "총 리뷰" while background chunks are still loading.
+  // When filters are not applied ("전체"), show the full dataset count from meta immediately.
+  const noFilters = !brand && !platform && !product && !from && !to && !minRating && !maxRating && !q;
+  const countToShow = (noFilters && META_TOTAL_COUNT) ? META_TOTAL_COUNT : st.n;
+
+  document.getElementById("statCount").textContent = Number(countToShow || 0).toLocaleString();
   document.getElementById("statAvgRating").textContent = st.avg ? st.avg.toFixed(2) : "-";
 
   const sub = [];
@@ -726,6 +735,7 @@ async function main() {
     meta = await r.json();
     // Use meta timestamp to bust caches for chunked JSON files.
     DATA_VERSION = encodeURIComponent(String(meta.generated_at || ""));
+    META_TOTAL_COUNT = Number(meta.count || 0) || 0;
   } catch (e) {
     // Fallback path (older deployments)
     const res2 = await fetch(LEGACY_URL, { cache: "no-store" });
