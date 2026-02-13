@@ -4,6 +4,10 @@ const META_URL = "../data/reviews_meta.json";
 const INDEX_FALLBACK_URL = "../data/reviews_index.json";
 const LEGACY_URL = "../data/reviews.json";
 
+// Cache-busting version derived from meta.generated_at so GitHub Pages/CDN/browser caches
+// don't serve stale chunks (which can make total count appear stuck).
+let DATA_VERSION = "";
+
 let INDEX_DIR = "../data/reviews_index";
 let INDEX_FILE_PREFIX = "chunk-";
 let INDEX_CHUNKS = 0;
@@ -298,8 +302,8 @@ async function loadBodyForRow(r) {
   if (r.body || r.title) return r;
 
   if (!BODY_CACHE.has(chunkId)) {
-    const url = `${BODY_DIR}/${BODY_FILE_PREFIX}${String(chunkId).padStart(3, "0")}.json`;
-    const res = await fetch(url, { cache: "force-cache" });
+    const url = `${BODY_DIR}/${BODY_FILE_PREFIX}${String(chunkId).padStart(3, "0")}.json${DATA_VERSION ? `?v=${DATA_VERSION}` : ""}`;
+    const res = await fetch(url, { cache: "no-store" });
     const payload = await res.json();
     BODY_CACHE.set(chunkId, payload.by_key || {});
   }
@@ -314,8 +318,8 @@ async function loadBodyForRow(r) {
 }
 
 async function fetchIndexChunk(chunkId) {
-  const url = `${INDEX_DIR}/${INDEX_FILE_PREFIX}${String(chunkId).padStart(3, "0")}.json`;
-  const res = await fetch(url, { cache: "force-cache" });
+  const url = `${INDEX_DIR}/${INDEX_FILE_PREFIX}${String(chunkId).padStart(3, "0")}.json${DATA_VERSION ? `?v=${DATA_VERSION}` : ""}`;
+  const res = await fetch(url, { cache: "no-store" });
   const payload = await res.json();
   return payload.rows || [];
 }
@@ -720,6 +724,8 @@ async function main() {
   try {
     const r = await fetch(META_URL, { cache: "no-store" });
     meta = await r.json();
+    // Use meta timestamp to bust caches for chunked JSON files.
+    DATA_VERSION = encodeURIComponent(String(meta.generated_at || ""));
   } catch (e) {
     // Fallback path (older deployments)
     const res2 = await fetch(LEGACY_URL, { cache: "no-store" });
